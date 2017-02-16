@@ -1,0 +1,178 @@
+---
+title: "Lab 03 - Shapefiles week 1"
+author: "Francisco SAntamarina"
+date: "February 16, 2017"
+output: github_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+
+Load the necessary packages and dataset for questions 1 and 2.
+```{r, warning=F, message = F }
+#setwd( "//hd.ad.syr.edu/02/7796a1/Documents/Desktop/DDM/DDM II" )
+library( maptools )
+library( sp )
+
+#dir.create( "shapefiles" )
+#setwd( "~/Desktop/DDM/DDM II/shapefiles.old" )
+
+```
+
+### Question 1: What are the demographics of neighborhoods in Syracuse?
+
+#### Download a TIGER shapefile of census tracts in Syracuse (Onondaga County)
+```{r}
+#download.file("ftp://ftp2.census.gov/geo/tiger/TIGER2010/TRACT/2010/tl_2010_36067_tract10.zip", "onondaga census tracts.zip" )
+#unzip( "onondaga census tracts.zip" )
+#file.remove( "onondaga census tracts.zip" )
+
+dir()
+
+syr <- readShapePoly( fn="tl_2010_36067_tract10", 
+         proj4string=CRS("+proj=longlat +datum=WGS84") )
+#syr <- readShapePoly( fn="01-05-2015", 
+#         proj4string=CRS("+proj=longlat +datum=WGS84") )
+
+plot( syr,  border="gray80" )
+```
+
+#### Download three demographic variables of interest, your choice, using the censusapi package
+```{r}
+# Francisco Santamarina's unique census key
+censuskey <- "b0387a9f8213a8adc3e0f940b217cc73f9f50a6f"
+
+# Variables to get: Households that received Food Stamps/SNAP in the past 12 months, Median Age, Median Family Income in the past 12 months, Aggregate travel time to work (in minutes), Public transportation to work (in minutes)
+#myvars <- c( "NAME",  "B22003_002E", "B01002A_001E", "B19113_001E", "B08136_001E", "B08136_007E"  )
+
+# Variables to get: Household received Food Stamps/SNAP in the past 12 months, Median Age, Median Family Income in the past 12 months
+myvars <- c( "NAME",  "B22003_002E", "B01002A_001E", "B19113_001E" )
+
+
+data2015 <- getCensus(name="acs5", vintage=2015, key=censuskey, 
+    vars=myvars, 
+    region="tract:*", # "*" means all available, so this will get all available tracts
+    regionin="state:36" #  "36" is the FIPS code for the state of New York
+    )
+head( data2015 )
+colnames( data2015 ) <- c( "Name", "State", "County", "Tract", "SNAP", "Median.Age", "Median.Family.Income" )
+
+# Create a subset of data for Onondaga County
+onondaga2015 <- data2015[ data2015$County == "067", ] #067 is the Onondaga County Code, within New York
+head( onondaga2015 )
+
+# Variables:
+## Household received SNAP
+## Median Age
+## Median Family Income
+#### Later: Travel time to work (in minutes)
+#### Later: Public transportation to work (in minutes)
+#### Later: Income < poverty level last 12 months
+#### Later: Income > poverty level last 12 months
+```
+
+#### Create choropleth maps that include a title and legend for each variable
+
+```{r}
+map.choices <- c( "Quantile", "Standard Deviation", "Equal Interval")
+```
+
+
+Households that received Food Stamps/SNAP in the past 12 months
+```{r}
+min( onondaga2015$SNAP, na.rm = TRUE  )
+max( onondaga2015$SNAP, na.rm = TRUE  )
+
+# Assign colors: brightest green is least SNAP households, darkest green is most SNAP households
+color.function.SNAP <- colorRampPalette( c( "chartreuse", "darkgreen" )  )
+col.ramp.SNAP <- color.function.SNAP( 5 ) # Number of groups is 5
+
+# Break up the values of the vectors into 5 levels according to their ranks and apply to each level one of the 5 colors.
+color.SNAP <- cut( onondaga2015$SNAP , breaks = 5, labels = col.ramp.SNAP ) 
+color.SNAP <- as.character( color.SNAP ) # Convert the assigned colors to each value into character
+
+# Match the various assigned level values to the proper tracts
+# SNAP.ordered <- match(   )   Skip this step for TIGER files?
+
+plot( syr,  border = "gray80", col=color.SNAP )
+title( main = "Households that received Food Stamps/SNAP in the past 12 months" )
+map.scale( metric = F, ratio = T, relwidth = 0.15, cex = 0.5 )
+legend.text.SN = c( "-0.7 - 140", "141 - 280", "280 - 421", "421 - 561", "561 - 702" )
+legend( "bottomright",
+        pch = 19, pt.cex = 1.5, cex = 0.7,
+        bg = "blanchedalmond",
+        legend = legend.text.SN,
+        col = col.ramp.SNAP,
+        box.col = "blanchedalmond",
+        title = "Food Stamp Amounts"
+)
+```
+
+
+Median Age
+```{r}
+min( onondaga2015$Median.Age, na.rm = TRUE  )
+max( onondaga2015$Median.Age, na.rm = TRUE  )
+
+color.function.MA <- colorRampPalette( c( "lightsalmon", "mediumorchid4" )  )
+col.ramp.MA <- color.function.MA( 5 ) # Number of groups is 5
+
+# Break up the values of the vectors into 5 levels according to their ranks and apply to each level one of the 5 colors.
+color.MA <- cut( onondaga2015$Median.Age , breaks = 5, labels = col.ramp.MA ) 
+color.MA <- as.character( color.MA ) # Convert the assigned colors to each value into character
+
+# Match the various assigned level values to the proper tracts
+# MA.ordered <- match(   )   Skip this step for TIGER files?
+
+plot( syr,  border = "gray80", col=color.MA )
+title( main = "Median Ages of Census Tracts" )
+map.scale( metric = F, ratio = T, relwidth = 0.15, cex = 0.5 )
+legend.text.MA = c( "19.5 - 28.7", "28.8 - 37.9", "37.9 - 47.2", "47.2 - 56.4", "56.4 - 65.6" )
+legend( "bottomright",
+        pch = 19, pt.cex = 1.5, cex = 0.7,
+        bg = "blanchedalmond",
+        legend = legend.text.MA,
+        col = col.ramp.MA,
+        box.col = "blanchedalmond",
+        title = "Median Age Groups"
+)
+```
+
+
+Median Family Income in the past 12 months
+```{r}
+min( onondaga2015$Median.Family.Income, na.rm = TRUE  )
+max( onondaga2015$Median.Family.Income, na.rm = TRUE  )
+
+color.function.MFI <- colorRampPalette( c( "cyan", "blue4" )  )
+col.ramp.MFI <- color.function.MFI( 5 ) # Number of groups is 5
+
+# Break up the values of the vectors into 5 levels according to their ranks and apply to each level one of the 5 colors.
+color.MFI <- cut( onondaga2015$Median.Family.Income , breaks = 5, labels = col.ramp.MFI ) 
+color.MFI <- as.character( color.MFI ) # Convert the assigned colors to each value into character
+mfiTest <- cut( 
+                onondaga2015$Median.Family.Income , 
+                breaks = 5, 
+                dig.lab = 9 #determines the number of digits to show when no labels
+              )
+levels(mfiTest)
+
+# Match the various assigned level values to the proper tracts
+# MFI.ordered <- match(   )   Skip this step for TIGER files?
+
+plot( syr,  border = "gray80", col=color.MFI )
+title( main = "Median Family Income in the Past 12 Months" )
+map.scale( metric = F, ratio = T, relwidth = 0.15, cex = 0.5 )
+legend.text.MFI = c( "$14,980 - $42,249", "$42,250 - $69,382", "69,383 - 96,515", "96,516 - 123,648", "123,649 - 150,916" )
+legend( "bottomright",
+        pch = 19, pt.cex = 1.5, cex = 0.7,
+        bg = "blanchedalmond",
+        legend = legend.text.MFI,
+        col = col.ramp.MFI,
+        box.col = "blanchedalmond",
+        title = "Median Family\nIncome Groups"
+)
+```
+
