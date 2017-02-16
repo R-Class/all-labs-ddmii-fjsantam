@@ -34,4 +34,4 @@ ani.width = 800,
 ani.height = 400
 )
 ```
-![](C:/Users/franc/Documents/GitHub/DDM-II/lab-02-animations-fjsantam/Random_Walk_Animation.gif)
+![](https://github.com/R-Class/all-labs-ddmii-fjsantam/blob/master/Random_Walk_Animation.gif)
