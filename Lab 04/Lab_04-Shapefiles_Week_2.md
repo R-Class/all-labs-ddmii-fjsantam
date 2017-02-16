@@ -1,16 +1,11 @@
----
-title: "Lab 03 - Shapefiles week 1"
-author: "Francisco Santamarina"
-date: "February 16, 2017"
-output: github_document
----
-
-```{r setup, include=FALSE, message=FALSE, warning=FALSE}
-knitr::opts_chunk$set(echo = TRUE)
-```
+Lab 03 - Shapefiles week 1
+================
+Francisco Santamarina
+February 16, 2017
 
 Load the necessary packages and dataset for questions 1, 2, and 3.
-```{r, warning=F, message = F }
+
+``` r
 #setwd( "//hd.ad.syr.edu/02/7796a1/Documents/Desktop/DDM/DDM II" )
 #setwd("~/Graduate School/PAI 690 Independent Study_DDM II/Labs")
 
@@ -25,6 +20,12 @@ setwd("~/Graduate School/PAI 690 Independent Study_DDM II/Labs/shapefiles")
 #unzip( "onondaga census tracts.zip" )
 #file.remove( "onondaga census tracts.zip" )
 dir()
+```
+
+    ## [1] "01-05-2015.dbf" "01-05-2015.prj" "01-05-2015.sbn" "01-05-2015.sbx"
+    ## [5] "01-05-2015.shp" "01-05-2015.shx"
+
+``` r
 syr <- readShapePoly( fn="01-05-2015", 
          proj4string=CRS("+proj=longlat +datum=WGS84") )
 #plot( syr,  border="gray80" )
@@ -36,7 +37,8 @@ tbl <- tbl_df(dat)
 ### Question 1: How many single family homes are in each neighborhood?
 
 #### Create a table of the count of single family homes by neighborhood
-```{r}
+
+``` r
 sf.nhood <- table( dat$Nhood[dat$LandUse == "Single Family"])
 
 #littletbl <- select(.data=tbl, Nhood, LandUse)
@@ -49,7 +51,8 @@ sf.nhood <- table( dat$Nhood[dat$LandUse == "Single Family"])
 ```
 
 #### Highlight all single family homes, using a different color for each neighborhood
-```{r}
+
+``` r
 col.nhood <- rainbow( 33, s = 1, v = 1, start = 0, end = 1, alpha = 0.5 )
 unique.nhood <- unique(dat$Nhood)
 unique.nhood <- sort(unique.nhood)
@@ -95,11 +98,13 @@ sf.nhoods <- c( sf.nhood1, sf.nhood2, sf.nhood3, sf.nhood4, sf.nhood5, sf.nhood6
 plot( syr, border="gray80", col=sf.nhoods, oma=c(5,7,1,1) )
 ```
 
+![](Lab_04-Shapefiles_Week_2_files/figure-markdown_github/unnamed-chunk-3-1.png)
 
 ### Question 2: Where does land in Syracuse have the highest value?
 
 #### Create a table of the count of single family homes with values above $200k in each neighborhood, as a pecentage of all single family homes
-```{r}
+
+``` r
 sf.rich.nhood <- table( dat$Nhood[dat$LandUse == "Single Family" &   
                            dat$AssessedVa > 200000]
                          ) 
@@ -108,27 +113,59 @@ sf.rich.nhood <- table( dat$Nhood[dat$LandUse == "Single Family" &
 #tbl <- table( sf.rich.percent$Nhood[sf.rich.percent$AssessedVa > 200000] )
 tbl.srn <- sf.rich.nhood
 cbind(tbl.srn,prop.table(tbl.srn))
-
 ```
 
+    ##                         tbl.srn            
+    ## Brighton                      0 0.000000000
+    ## Court-Woodlawn                0 0.000000000
+    ## Downtown                      0 0.000000000
+    ## Eastwood                      1 0.003952569
+    ## Elmwood                       0 0.000000000
+    ## Far Westside                  0 0.000000000
+    ## Franklin Square               0 0.000000000
+    ## Hawley-Green                  0 0.000000000
+    ## Lakefront                     0 0.000000000
+    ## Lincoln Hill                  7 0.027667984
+    ## Meadowbrook                  60 0.237154150
+    ## Near Eastside                 0 0.000000000
+    ## Near Westside                 0 0.000000000
+    ## North Valley                  0 0.000000000
+    ## Northside                     2 0.007905138
+    ## Outer Comstock                3 0.011857708
+    ## Park Ave.                     0 0.000000000
+    ## Prospect Hill                 0 0.000000000
+    ## Salt Springs                  0 0.000000000
+    ## Sedgwick                    130 0.513833992
+    ## Skunk City                    0 0.000000000
+    ## South Campus                  0 0.000000000
+    ## South Valley                  5 0.019762846
+    ## Southside                     0 0.000000000
+    ## Southwest                     0 0.000000000
+    ## Strathmore                   16 0.063241107
+    ## Tipp Hill                     0 0.000000000
+    ## University Hill               1 0.003952569
+    ## University Neighborhood      17 0.067193676
+    ## Washington Square             0 0.000000000
+    ## Westcott                      0 0.000000000
+    ## Winkworth                    11 0.043478261
+
 #### Plot the value / acre of all parcels in Syracuse
-```{r}
+
+``` r
 alv.acre <- mutate(.data = tbl, AssessedLa.acre = AssessedLa / Acres)
 
 col.alv.acre <- cut( alv.acre$AssessedLa.acre, breaks = 5 )
 
 plot( syr, border="gray80", col=col.alv.acre, oma=c(5,7,1,1) )
-
 ```
 
-
+![](Lab_04-Shapefiles_Week_2_files/figure-markdown_github/unnamed-chunk-5-1.png)
 
 ### Question 3: What is the age of single family homes in each neighborhood?
 
 #### Create a table that reports the 10th, 25th, 50th, 75th, and 90th percentile of home ages in each neighborhood.
 
-```{r}
-
+``` r
 #sf.rich.nhood <- table( dat$Nhood[dat$LandUse == "Single Family" &   
 #                           dat$AssessedVa > 200000]
 #                         ) 
@@ -139,13 +176,11 @@ plot( syr, border="gray80", col=col.alv.acre, oma=c(5,7,1,1) )
 #cbind(tbl.srn,prop.table(tbl.srn))
 
 #quantile( sf.rich )
-
 ```
 
 #### Create a choropleth map that shows the age of properties by decade, pre-1900s can be one category.
 
-```{r}
-
+``` r
 #sf.rich.nhood <- table( dat$Nhood[dat$LandUse == "Single Family" &   
 #                           dat$AssessedVa > 200000]
 #                         ) 
@@ -156,5 +191,4 @@ plot( syr, border="gray80", col=col.alv.acre, oma=c(5,7,1,1) )
 #cbind(tbl.srn,prop.table(tbl.srn))
 
 #quantile( sf.rich )
-
 ```
