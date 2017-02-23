@@ -16,7 +16,7 @@ knitr::opts_chunk$set( message=F, warning=F )
 
 Load the necessary packages.
 ```{r}
-library( censusAPI)
+library( censusapi)
 library( ggmap )
 library( jsonlite )
 library( maptools )
@@ -225,8 +225,14 @@ data2015 <- getCensus(name="acs5", vintage=2015, key=censuskey,
     )
 head( data2015 )
 colnames( data2015 ) <- c( "Name", "State", "County", "Tract", "SNAP", "Median.Age", "Median.Family.Income" )
+#### Not getting enough information to make a unique mapping
 
 cen.dat <- cbind( dat, data2015 )
+merged <- merge( dat, data2015, by.x = "tract.id", by.y = "Tract", all.x=F, all.y=F)
+
+nrow(dat)
+nrow(merged)
+str(merged)
 
 rm( censuskey )
 rm( myvars )
