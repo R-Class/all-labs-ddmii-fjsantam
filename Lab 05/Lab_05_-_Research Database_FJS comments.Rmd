@@ -1,0 +1,259 @@
+---
+title: "Lab 05 - Research Databases"
+author: "Francisco Santamarina"
+date: "February 23, 2017"
+output:
+  html_document:
+    df_print: paged
+    keep_md: true
+
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set( message=F, warning=F )
+```
+
+
+Load the necessary packages.
+```{r}
+library( censusAPI)
+library( ggmap )
+library( jsonlite )
+library( maptools )
+library( memisc )
+library( RCurl )
+library( sp )
+library( spatialEco ) 
+
+```
+
+Load and clean the necessary dataset.
+```{r}
+#Set the working directory
+#setwd( "//hd.ad.syr.edu/02/7796a1/Documents/Desktop/DDM/DDM II" )
+setwd("~/Graduate School/PAI 690 Independent Study_DDM II/Labs")
+
+#Identify the data's location. 
+zillowdatlocation <- "https://docs.google.com/spreadsheets/d/1W0vM5sCRhZjkQh6A0WGV8j1rhQAjecCrQW7PguHft-E/pub?gid=1989082857&single=true&output=csv"
+#Download the URL's content (?)
+zillowdat.raw <- getURL( zillowdatlocation, ssl.verifypeer = FALSE )
+#Assign the content, a .csv, to a dataframe, after opening a connection to a text file
+dat <- read.csv( textConnection( zillowdat.raw ), stringsAsFactors = FALSE )
+#Show the structure of the object
+str( dat )
+
+#Rename variables so they have shorter names and are easier to work with
+names( dat ) <- c("timestamp","price","X1","X2","sqft","your.name","lot.size","beds",
+                  "bath","garage","year","elementary","middle","high","walk","tax","highway",
+                  "restaurant","starbucks","park","mall","address","zip","tract" )
+
+# Remove commas from character strings, then cast them as numbers
+dat$price <- as.numeric( gsub( ",","", dat$price ) )
+dat$tax <- as.numeric( gsub( ",","", dat$tax ) )
+dat$lot.size <- as.numeric( gsub( ",","", dat$lot.size ) )
+dat$sqft <- as.numeric( gsub( ",","", dat$sqft ) )
+
+dat$lot.size[ is.na( dat$lot.size ) ] <- mean( dat$lot.size, na.rm=T )
+
+
+# Remove variables that ar eno longer needed
+
+rm( zillowdatlocation )
+rm( zillowdat.raw )
+
+```
+
+#### Plot of Initial Data
+```{r}
+## THIS SECTION IS NOT GENERATING THE PDF CORRECTLY
+
+source( "Lab_05_-_Load Data.R" )
+
+
+#This is a function to generate the plots, defauling to price data for the Y axis
+plotFun <- function( x1, x2 = dat$price, lab1, lab2 = "House Price" )
+{
+	plot( x1, x2,
+	      pch = 19, 
+	      col = gray(0.6, alpha = 0.2), 
+	      cex = 3.5,  
+	      bty = "n",
+	      xlab = lab1, 
+	      ylab = lab2, cex.lab = 1.5 )
+
+	lines( lowess( x2~x1 ), col = "red", lwd = 3 )
+}
+
+# CREATE GRAPHS AND SAVE AS PDF
+# dir.create( "Results from Lab 05" ) # set up a results directory
+
+#FIX THIS pdf( "Results from Lab 05./Results/Predictors of Price.pdf" )
+
+#Plot of House Size
+#plotFun( x1=dat$sqft, x2=dat$price, lab1="Size (Square Feet)", lab2="House Price" )
+plotFun( x1 = dat$sqft, lab1 = "House Size (Square Feet)")
+
+#Plot of Lot Size
+plotFun( x1 = dat$lot.size, lab1 = "Lot Size (Square Feet)")
+
+#Age of House vs. Price
+plotFun( x1 = dat$year, lab1 = "Age of House (Years)")
+
+#Age of House vs. House Size
+#Subtract the year from 2014 to get the age of the house, not plot the year in which it was built
+plotFun( x1 = (2014-dat$year), x2 = dat$sqft, lab1 = "Age of House (Years)", lab2 = "House Size (Square Feet)")
+
+#Walk Score
+plotFun( x1 = dat$walk, lab1 = "Walk Score")
+
+#School
+plotFun( x1 = (dat$elementary + dat$middle + dat$high), lab1 = "School Quality")
+#school <- dat$elementary + dat$middle + dat$high
+#plotFun( x1 = school, lab1 = "School Quality")
+
+#Distance to Restaurants
+plotFun( x1 = dat$restaurant, lab1 = "Restaurant Proximity")
+
+#Distance to Starbucks
+plotFun( x1 = dat$starbucks, lab1 = "Starbucks Proximity")
+
+#Distance to Parks
+plotFun( x1 = dat$park, lab1 = "Park Proximity")
+
+#Distance to Malls
+plotFun( x1 = dat$mall, lab1 = "Mall Proximity")
+
+#Presence of Garage (Y/N) vs. Price
+## Use regular plot - no need for a trend line in a plot comparing Yes and No
+plot( x = as.factor(dat$garage), y = dat$price, xlab = "House Has Garage?", ylab = "House Price" )
+#Because this is a factor, can use tapply to create an array holding the values
+tapply( dat$price, as.factor(dat$garage), mean )
+
+#Number of Bathrooms (numeric) vs. Price
+plot( x = as.factor(dat$bath), y = dat$price, xlab = "Bathrooms in the House", ylab = "House Price" )
+#Because this is a factor, can use tapply to create an array holding the values
+tapply( dat$price, as.factor(dat$bath), mean )
+
+#Number of Bedrooms (integer) vs. Price
+plot( x = as.factor(dat$beds), y = dat$price, xlab = "Bedrooms in the House", ylab = "House Price" )
+#Because this is a factor, can use tapply to create an array holding the values
+tapply( dat$price, as.factor(dat$beds), mean )
+
+#Near a Highway (Y/N) vs. Price
+plot( x = as.factor(dat$highway), y = dat$price, xlab = "Near a Highway?", ylab = "House Price" )
+#Because this is a factor, can use tapply to create an array holding the values
+tapply( dat$price, as.factor(dat$highway), mean )
+
+#dev.off()  # end of pdf call
+
+```
+
+#### Add census tract FIPS ID
+```{r}
+#Compile home address info and clean the strings
+houses <- dat[ , c("address","zip") ]
+houses$address <- gsub( ",", "", houses$address )
+houses$address <- gsub( "\\.", "", houses$address )
+#Combine the strings in this order: Address, City, State, Zip. Separate with comma and space
+addresses <- paste( houses$address, "Syracuse, NY", houses$zip, sep=", " )
+str( addresses )
+
+#Translate the address strings to latitude and longitude coordinates
+lat.long <- geocode( addresses )
+#Cool info on batching here: http://www.shanelynn.ie/massive-geocoding-with-r-and-google-maps/
+str( lat.long )
+
+dat <- cbind( dat, lat.long )
+
+#Info here on get_map: https://cran.r-project.org/web/packages/ggmap/ggmap.pdf
+
+#Remove now-unnecessary variables
+rm( houses )
+rm( addresses )
+```
+
+```{r}
+require( RCurl )
+
+tract.id <- NULL
+
+for( i in 1:nrow(lat.long) )
+{
+
+	print( i )
+	
+	aURL <- paste( "http://data.fcc.gov/api/block/2010/find?latitude=",lat.long$lat[i],"&longitude=",lat.long$lon[i], sep="" )
+
+	x <- getURL( aURL )
+
+	start.here <- regexpr( "Block FIPS", x )
+
+	this.one <- substr( x, (start.here+12), (start.here+26) )
+
+	# FIPS: 360670040001007  36=state, 067=county, 004000=census.tract 1007=block.group
+
+	tract.id[i] <- substr( this.one, 6, 11 )
+
+}
+
+dat <- cbind( dat, tract.id )
+
+rm( tract.id )
+```
+
+
+#### Spatial join homes to census tracts
+```{r}
+setwd( "~/Desktop/DDM/DDM II/shapefiles.full" )
+dir()
+syr <- readShapePoly( fn="tl_2010_36067_tract10", 
+         proj4string=CRS("+proj=longlat +datum=WGS84") )
+#syr <- readShapePoly( fn="01-05-2015", 
+#         proj4string=CRS("+proj=longlat +datum=WGS84") )
+```
+
+#### Get Census Data for each home
+```{r}
+# Francisco Santamarina's unique census key
+censuskey <- "b0387a9f8213a8adc3e0f940b217cc73f9f50a6f"
+myvars <- c( "NAME",  "B22003_002E", "B01002A_001E", "B19113_001E" )
+
+data2015 <- getCensus(name="acs5", vintage=2015, key=censuskey, 
+    vars=myvars, 
+    region="tract:*", # "*" means all available, so this will get all available tracts
+    regionin="state:36" #  "36" is the FIPS code for the state of New York
+    )
+head( data2015 )
+colnames( data2015 ) <- c( "Name", "State", "County", "Tract", "SNAP", "Median.Age", "Median.Family.Income" )
+
+cen.dat <- cbind( dat, data2015 )
+
+rm( censuskey )
+rm( myvars )
+rm( data2015 )
+
+```
+
+#### Aggregate Crimes by Census Tract
+```{r}
+crime.dat <- read.csv( "Data/crime.lat.lon.csv" )
+
+crime.count <- NULL
+
+for( i in 1:nrow(lat.long) )
+{
+   lat.i <- lat.long$lat[i]
+   lon.i <- lat.long$lon[i]
+   
+   dist.c <- sqrt( (lat.i - crime.dat$lat)^2 + (lon.i - crime.dat$lon)^2 )
+   
+   crime.count[i] <- sum( dist.c < 0.01 )
+    
+}
+
+dat <- cbind( dat, crime.count )
+
+dat <- merge( dat, cen.dat, by.x="tract.id", by.y="tract" )
+
+#https://github.com/lecy/hedonic-prices
+```
