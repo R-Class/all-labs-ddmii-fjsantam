@@ -114,16 +114,29 @@ head( syr@data )
 names( syr )
 table( syr$GEOID10 )
 str( syr$TRACTCE10 )
-last4tract <- substr(syr$GEOID10, 8,11)
-head(last4tract)
 
-syr.subset <- syr[ (as.numeric(substr(syr$GEOID10, 8,11)) < 6200 ) & (as.numeric(substr(syr$GEOID10, 8,11)) > 0), ]
-head(syr.subset)
-plot(syr.subset)
+#last4tract <- substr(syr$GEOID10, 8,11)
+#head(last4tract)
+
+#syr.subset <- syr[ (as.numeric(substr(syr$GEOID10, 8,11)) < 6200 ) & (as.numeric(substr(syr$GEOID10, 8,11)) > 0), ]
+#head(syr.subset)
+#plot(syr.subset)
+
+# Plot only the tracts within the city
+# 0 or 1 in the 7th position of the FIPS ID string seem to differentiate city vs rural
+# OR only looking at the last 4 is insufficient for a 3-digit census tract ID
+
+last5tract <- unique(substr(syr$GEOID10, 7,11))
+table(last5tract)
+syr.subset2 <- syr[ (as.numeric(substr(syr$GEOID10, 7,11)) < 06200 ) & (as.numeric(substr(syr$GEOID10, 7,11)) > 0), ]
+head(syr.subset2)
+plot(syr.subset2)
+
+
 plot(syr)
 
 # use gIntersect  instead of gClip
-
+# use syr.subset2
 ```
 
 
