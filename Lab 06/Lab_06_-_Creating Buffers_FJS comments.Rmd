@@ -1,0 +1,191 @@
+---
+title: "Lab 06 - Creating Buffers"
+author: "Francisco Santamarina"
+date: "March 09, 2017"
+output:
+  html_document:
+    df_print: paged
+    keep_md: true
+
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set( message=F, warning=F )
+```
+
+## Part 1
+
+Load the necessary packages.
+```{r}
+#library( censusAPI)
+#library( ggmap )
+#library( jsonlite )
+library( maptools )
+#library( memisc )
+#library( RCurl )
+library( raster )
+library( rgeos )
+library( sp )
+#library( spatialEco ) 
+
+```
+
+Load and clean the necessary dataset.
+```{r}
+# Set the working directory
+#setwd( "//hd.ad.syr.edu/02/7796a1/Documents/Desktop/DDM/DDM II/Lab 06" )
+setwd("~/Graduate School/PAI 690 Independent Study_DDM II/Labs/Lab 06_Buffers")
+#dir.create( "shapefiles" )
+setwd( "./shapefiles" )
+
+
+# Download shapefiles
+download.file("ftp://ftp2.census.gov/geo/tiger/TIGER2010/TRACT/2010/tl_2010_36067_tract10.zip", "onondaga census tracts.zip" )
+unzip( "onondaga census tracts.zip" )
+file.remove( "onondaga census tracts.zip" )
+dir()
+
+
+# Load and plot shapefiles
+syr <- readShapePoly( fn="tl_2010_36067_tract10", proj4string=CRS("+proj=longlat +datum=WGS84") )
+
+par( mar=c(0,0,0,0) )
+plot( syr,  border="gray10" )
+
+
+# Add roads
+
+download.file("ftp://ftp2.census.gov/geo/tiger/TIGER2015/PRISECROADS/tl_2015_36_prisecroads.zip", "primary_and_secondary_roads.zip" )
+
+unzip( "primary_and_secondary_roads.zip" )
+file.remove( "primary_and_secondary_roads.zip" )
+dir()
+
+roads <- readShapeLines( fn="tl_2015_36_prisecroads", proj4string=CRS("+proj=longlat +datum=WGS84") )
+
+head( roads@data )
+table( roads$RTTYP )
+#RTTYP = Road Type Code
+# C = county
+# I = interstate
+# M = Common Name
+# O = other
+# S = state recognized
+# U = U.S.
+
+```
+
+#### Clip Roads down to same size as census tracts
+```{r}
+# Using gClip() to do a modified subsetting of geospatial points/lines
+# http://robinlovelace.net/r/2014/07/29/clipping-with-r.html
+# rgeos version: 0.3-5, (SVN revision 447)
+#  GEOS runtime version: 3.4.2-CAPI-1.8.2 r3921 
+#  Polygon checking: TRUE
+
+gClip <- function(shp, bb){  #shp = shapefile, bb = bounding box
+  if(class(bb) == "matrix") b_poly <- as(extent(as.vector(t(bb))), "SpatialPolygons")
+  else b_poly <- as(extent(bb), "SpatialPolygons")
+  gIntersection(shp, b_poly, byid = T)
+}
+
+roads.clipped <- gClip(roads, syr)
+#this returns a BOX that has the roads limited within it
+plot( roads.clipped )
+str(roads.clipped)
+# Clip is computationally expensive, has to determine what to do with the polygons destroyed in the clip
+```
+
+
+#Create a polygon outline
+```{r}
+### Get census tracts FIPS, grab all ids of 1-61, dissolve the polygons to get the outline
+setwd( "~/Graduate School/PAI 690 Independent Study_DDM II/Labs/shapefiles" )
+#download.file("ftp://ftp2.census.gov/geo/tiger/TIGER2010/TRACT/2010/tl_2010_36067_tract10.zip", "onondaga census tracts.zip" )
+#unzip( "onondaga census tracts.zip" )
+#file.remove( "onondaga census tracts.zip" )
+dir()
+#syr2 <- readShapePoly( fn="01-05-2015", 
+#         proj4string=CRS("+proj=longlat +datum=WGS84") 
+#         )
+#head( syr2@data) #returns the output of a list of values in syr2 map data
+#syr2.subset <- syr2[ as.numeric(as.character(syr2$CensusTrac)) < 62 && as.numeric(as.character(syr2$CensusTrac)) > 0 ]
+head( syr@data )
+names( syr )
+table( syr$GEOID10 )
+str( syr$TRACTCE10 )
+last4tract <- substr(syr$GEOID10, 8,11)
+head(last4tract)
+
+syr.subset <- syr[ (as.numeric(substr(syr$GEOID10, 8,11)) < 6200 ) & (as.numeric(substr(syr$GEOID10, 8,11)) > 0), ]
+head(syr.subset)
+plot(syr.subset)
+plot(syr)
+
+# use gIntersect  instead of gClip
+
+```
+
+
+#### Extract the interstates as a separate layer
+```{r}
+#subset()
+
+par( mar=c(0,0,0,0) )
+plot( syr,  border="gray80" )
+#plot( roads, col="steelblue", lwd=2, add=T )
+plot( roads.clipped, col="steelblue", lwd=1, add=T )
+
+#interstate <- roads[ roads$RTTYP == "I", ]
+interstate <- roads.clipped[ roads.clipped$RTTYP == "I", ]
+interstate.clipped <- gClip( interstate, syr )
+#this returns a BOX that has the interstates limited within it
+plot( interstate.clipped, col="red", add=T )
+```
+
+#### Create a buffer of approximately a quarter mile from the interstate
+```{r}
+buff1 <- gBuffer(
+  interstate.clipped,
+  width=1, # width of buffer
+  byid = TRUE # applied across "subgeometries"   IF you do FALSE, will automatically create a dissolved buffer
+)
+str(buff1)
+plot( buff1, col="yellow", add=T)
+```
+
+#### Identify all houses that fall within the buffer zone
+```{r}
+dat <- read.csv( "https://raw.githubusercontent.com/lecy/maps-in-R/master/Data/syr_parcels.csv" )
+
+```
+
+
+#### Add a new categorical variable to the houses dataset: within buffer zone or not?
+```{r}
+
+```
+
+
+## Part 2
+
+#### Create a buffer a quarter mile from industrial zones (LandUse) and plot the buffer zone
+```{r}
+
+```
+
+#### Identify houses within the buffer zones and create a categorical variable in the dataset indicating proximity to industrial zones
+```{r}
+
+```
+
+#### Create a buffer zone an eighth of a mile from schools, and plot the buffer zone.
+```{r}
+
+```
+
+#### Identify houses within the buffer zones and create a categorical variable in the dataset indicating proximity to schools
+```{r}
+
+```
+
