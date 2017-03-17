@@ -65,6 +65,7 @@ roads <- readShapeLines( fn="tl_2015_36_prisecroads", proj4string=CRS("+proj=lon
 
 head( roads@data )
 table( roads$RTTYP )
+class( roads )
 #RTTYP = Road Type Code
 # C = county
 # I = interstate
@@ -72,8 +73,38 @@ table( roads$RTTYP )
 # O = other
 # S = state recognized
 # U = U.S.
+```
+
+#### Create a polygon outline
+```{r}
+### Get census tracts FIPS, grab all ids of 1-61, dissolve the polygons to get the outline
+setwd( "~/Graduate School/PAI 690 Independent Study_DDM II/Labs/shapefiles" )
+#download.file("ftp://ftp2.census.gov/geo/tiger/TIGER2010/TRACT/2010/tl_2010_36067_tract10.zip", "onondaga census tracts.zip" )
+#unzip( "onondaga census tracts.zip" )
+#file.remove( "onondaga census tracts.zip" )
+dir()
+#syr2 <- readShapePoly( fn="01-05-2015", 
+#         proj4string=CRS("+proj=longlat +datum=WGS84") 
+#         )
+#head( syr2@data) #returns the output of a list of values in syr2 map data
+#syr2.subset <- syr2[ as.numeric(as.character(syr2$CensusTrac)) < 62 && as.numeric(as.character(syr2$CensusTrac)) > 0 ]
+head( syr@data )
+names( syr )
+table( syr$GEOID10 )
+str( syr$TRACTCE10 )
+
+# Plot only the tracts within the city
+# 0 or 1 in the 7th position of the FIPS ID string seem to differentiate city vs rural
+# OR only looking at the last 4 is insufficient for a 3-digit census tract ID
+
+last5tract <- unique(substr(syr$GEOID10, 7,11))
+table(last5tract)
+syr.subset2 <- syr[ (as.numeric(substr(syr$GEOID10, 7,11)) < 06200 ) & (as.numeric(substr(syr$GEOID10, 7,11)) > 0), ]
+head(syr.subset2)
+plot(syr.subset2)
 
 ```
+
 
 #### Clip Roads down to same size as census tracts
 ```{r}
@@ -93,50 +124,12 @@ roads.clipped <- gClip(roads, syr)
 #this returns a BOX that has the roads limited within it
 plot( roads.clipped )
 str(roads.clipped)
+class(roads.clipped)
 # Clip is computationally expensive, has to determine what to do with the polygons destroyed in the clip
-```
-
-
-#Create a polygon outline
-```{r}
-### Get census tracts FIPS, grab all ids of 1-61, dissolve the polygons to get the outline
-setwd( "~/Graduate School/PAI 690 Independent Study_DDM II/Labs/shapefiles" )
-#download.file("ftp://ftp2.census.gov/geo/tiger/TIGER2010/TRACT/2010/tl_2010_36067_tract10.zip", "onondaga census tracts.zip" )
-#unzip( "onondaga census tracts.zip" )
-#file.remove( "onondaga census tracts.zip" )
-dir()
-#syr2 <- readShapePoly( fn="01-05-2015", 
-#         proj4string=CRS("+proj=longlat +datum=WGS84") 
-#         )
-#head( syr2@data) #returns the output of a list of values in syr2 map data
-#syr2.subset <- syr2[ as.numeric(as.character(syr2$CensusTrac)) < 62 && as.numeric(as.character(syr2$CensusTrac)) > 0 ]
-head( syr@data )
-names( syr )
-table( syr$GEOID10 )
-str( syr$TRACTCE10 )
-
-#last4tract <- substr(syr$GEOID10, 8,11)
-#head(last4tract)
-
-#syr.subset <- syr[ (as.numeric(substr(syr$GEOID10, 8,11)) < 6200 ) & (as.numeric(substr(syr$GEOID10, 8,11)) > 0), ]
-#head(syr.subset)
-#plot(syr.subset)
-
-# Plot only the tracts within the city
-# 0 or 1 in the 7th position of the FIPS ID string seem to differentiate city vs rural
-# OR only looking at the last 4 is insufficient for a 3-digit census tract ID
-
-last5tract <- unique(substr(syr$GEOID10, 7,11))
-table(last5tract)
-syr.subset2 <- syr[ (as.numeric(substr(syr$GEOID10, 7,11)) < 06200 ) & (as.numeric(substr(syr$GEOID10, 7,11)) > 0), ]
-head(syr.subset2)
-plot(syr.subset2)
-
-
-plot(syr)
 
 # use gIntersect  instead of gClip
 # use syr.subset2
+
 ```
 
 
