@@ -24,6 +24,7 @@ library( maptools )
 #library( memisc )
 #library( RCurl )
 library( raster )
+library( rgdal )
 library( rgeos )
 library( sp )
 #library( spatialEco ) 
@@ -99,10 +100,10 @@ str( syr$TRACTCE10 )
 
 last5tract <- unique(substr(syr$GEOID10, 7,11))
 table(last5tract)
-syr.subset2 <- syr[ (as.numeric(substr(syr$GEOID10, 7,11)) < 06200 ) & (as.numeric(substr(syr$GEOID10, 7,11)) > 0), ]
-head(syr.subset2)
-plot(syr.subset2)
-
+syr.sub <- syr[ (as.numeric(substr(syr$GEOID10, 7,11)) < 06200 ) & (as.numeric(substr(syr$GEOID10, 7,11)) > 0), ]
+head(syr.sub)
+plot(syr.sub)
+class( syr.sub )
 ```
 
 
@@ -123,12 +124,19 @@ gClip <- function(shp, bb){  #shp = shapefile, bb = bounding box
 roads.clipped <- gClip(roads, syr)
 #this returns a BOX that has the roads limited within it
 plot( roads.clipped )
-str(roads.clipped)
-class(roads.clipped)
+str( roads.clipped )
+class( roads.clipped )
 # Clip is computationally expensive, has to determine what to do with the polygons destroyed in the clip
 
-# use gIntersect  instead of gClip
-# use syr.subset2
+# use intersect instead of gClip and syr.sub
+## source: https://gis.stackexchange.com/questions/23931/how-to-intersect-lines-and-polygons-in-r
+## author: xhie                library(raster)
+## newLines <- raster::intersect(SpatialLinesDataframe, SpatialPolygonDataframe)
+roads.cropped <- raster::intersect( roads, syr.sub )
+plot( roads.cropped )
+str( roads.cropped )
+class( roads.cropped )
+table( roads.cropped$RTTYP )
 
 ```
 
@@ -137,32 +145,69 @@ class(roads.clipped)
 ```{r}
 #subset()
 
+# Using roads.clipped
+
 par( mar=c(0,0,0,0) )
 plot( syr,  border="gray80" )
 #plot( roads, col="steelblue", lwd=2, add=T )
 plot( roads.clipped, col="steelblue", lwd=1, add=T )
 
 #interstate <- roads[ roads$RTTYP == "I", ]
-interstate <- roads.clipped[ roads.clipped$RTTYP == "I", ]
+interstate1 <- roads.clipped[ roads.clipped$RTTYP == "I", ]
 interstate.clipped <- gClip( interstate, syr )
 #this returns a BOX that has the interstates limited within it
 plot( interstate.clipped, col="red", add=T )
+
+
+
+# Using roads.cropped
+
+par( mar=c(0,0,0,0) )
+plot( syr.sub,  border="gray80" )
+#plot( roads, col="steelblue", lwd=2, add=T )
+plot( roads.cropped, col="steelblue", lwd=1, add=T )
+
+#interstate <- roads[ roads$RTTYP == "I", ]
+interstate2 <- roads.cropped[ roads.cropped$RTTYP == "I", ]
+interstate.cropped <- raster::intersect( interstate2, syr.sub )
+
+plot( interstate.cropped, col="red", add=T )
+class( interstate.cropped )
 ```
 
 #### Create a buffer of approximately a quarter mile from the interstate
 ```{r}
+# To make accurate buffers, use a variant of this:
+proj4string( interstate.cropped ) = CRS("+proj=longlat +datum=WGS84") # set it to lat-long
+#interstate.projected <- spTransform( interstate.cropped, CRS( "+init=epsg:3347" ) ) 
+interstate.projected <- spTransform( interstate.cropped, CRS( "+proj=longlat +datum=WGS84" ) ) 
+#gridded( interstate.projected ) = TRUE
+rtest = raster( interstate.projected )
+plot(rtest)
+
+interstate.projected <- spTransform( interstate.cropped, CRS( "+init=epsg:3347" ) ) 
+coordinates(interstate.projected)
+
+# Approximate Buffer
 buff1 <- gBuffer(
-  interstate.clipped,
-  width=1, # width of buffer
-  byid = TRUE # applied across "subgeometries"   IF you do FALSE, will automatically create a dissolved buffer
+  interstate.cropped,
+  width = 0.001, # width of buffer
+  byid = FALSE # applied across "subgeometries"   IF you do FALSE, will automatically create a dissolved buffer
 )
+buff1 <- SpatialPolygonsDataFrame( buff1, data=buff1@data)
+class( buff1 )
 str(buff1)
-plot( buff1, col="yellow", add=T)
+plot( buff1, add=T)
+
+
+# proj4string(buff1)=CRS("+proj=longlat +datum=WGS84")
+
 ```
 
 #### Identify all houses that fall within the buffer zone
 ```{r}
 dat <- read.csv( "https://raw.githubusercontent.com/lecy/maps-in-R/master/Data/syr_parcels.csv" )
+names( dat )
 
 ```
 
