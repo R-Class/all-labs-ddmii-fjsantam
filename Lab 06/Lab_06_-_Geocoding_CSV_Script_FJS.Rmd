@@ -22,6 +22,7 @@ setwd("~/GitHub/all-labs-ddmii-fjsantam/Lab 06")
 # Load packages
 library( RCurl )
 library( ggmap )
+# dir()
 ```
 
 
@@ -42,6 +43,15 @@ dat <- read.csv( textConnection( zillowdat.raw ), stringsAsFactors = FALSE )
 names( dat ) <- c("timestamp","price","X1","X2","sqft","your.name","lot.size","beds",
                   "bath","garage","year","elementary","middle","high","walk","tax","highway",
                   "restaurant","starbucks","park","mall","address","zip","tract" )
+
+# Remove commas from character strings, then cast them as numbers
+dat$price <- as.numeric( gsub( ",","", dat$price ) )
+dat$tax <- as.numeric( gsub( ",","", dat$tax ) )
+dat$lot.size <- as.numeric( gsub( ",","", dat$lot.size ) )
+dat$sqft <- as.numeric( gsub( ",","", dat$sqft ) )
+
+dat$lot.size[ is.na( dat$lot.size ) ] <- mean( dat$lot.size, na.rm=T )
+
 rm( zillowdatlocation )
 rm( zillowdat.raw )
 ```
@@ -63,5 +73,5 @@ lat.long <- geocode( addresses )
 # Cool info on batching here: http://www.shanelynn.ie/massive-geocoding-with-r-and-google-maps/
 #str( lat.long )
 
-write.csv(data, "data.csv", row.names=FALSE)
+write.csv(lat.long, "data.csv", row.names=FALSE)
 ```
