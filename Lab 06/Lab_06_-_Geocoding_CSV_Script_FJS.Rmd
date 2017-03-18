@@ -73,5 +73,7 @@ lat.long <- geocode( addresses )
 # Cool info on batching here: http://www.shanelynn.ie/massive-geocoding-with-r-and-google-maps/
 #str( lat.long )
 
-write.csv(lat.long, "data.csv", row.names=FALSE)
+dat <- cbind( dat, lat.long )
+
+write.csv(dat, "data.csv", row.names=FALSE)
 ```
