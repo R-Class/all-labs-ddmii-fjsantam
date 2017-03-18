@@ -1,0 +1,67 @@
+---
+title: "Lab 06 - Creating Buffers"
+author: "Francisco Santamarina"
+date: "March 09, 2017"
+output:
+  html_document:
+    df_print: paged
+    keep_md: true
+
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set( message=F, warning=F )
+```
+
+## Load Necessary Packages
+
+```{r}
+# Set working directors
+setwd("~/GitHub/all-labs-ddmii-fjsantam/Lab 06")
+
+# Load packages
+library( RCurl )
+library( ggmap )
+```
+
+
+
+## Load the Data
+
+```{r}
+# Identify the data's location. 
+zillowdatlocation <- "https://docs.google.com/spreadsheets/d/1W0vM5sCRhZjkQh6A0WGV8j1rhQAjecCrQW7PguHft-E/pub?gid=1989082857&single=true&output=csv"
+# Download the URL's content (?)
+zillowdat.raw <- getURL( zillowdatlocation, ssl.verifypeer = FALSE )
+# Assign the content, a .csv, to a dataframe, after opening a connection to a text file
+dat <- read.csv( textConnection( zillowdat.raw ), stringsAsFactors = FALSE )
+# Show the structure of the object
+#str( dat )
+
+# Rename variables so they have shorter names and are easier to work with
+names( dat ) <- c("timestamp","price","X1","X2","sqft","your.name","lot.size","beds",
+                  "bath","garage","year","elementary","middle","high","walk","tax","highway",
+                  "restaurant","starbucks","park","mall","address","zip","tract" )
+rm( zillowdatlocation )
+rm( zillowdat.raw )
+```
+
+
+## Convert the Data into Lat-Lon Coordinates
+
+```{r}
+# Compile home address info and clean the strings
+houses <- dat[ , c("address","zip") ]
+houses$address <- gsub( ",", "", houses$address )
+houses$address <- gsub( "\\.", "", houses$address )
+# Combine the strings in this order: Address, City, State, Zip. Separate with comma and space
+addresses <- paste( houses$address, "Syracuse, NY", houses$zip, sep=", " )
+#str( addresses )
+
+# Translate the address strings to latitude and longitude coordinates
+lat.long <- geocode( addresses )
+# Cool info on batching here: http://www.shanelynn.ie/massive-geocoding-with-r-and-google-maps/
+#str( lat.long )
+
+write.csv(data, "data.csv", row.names=FALSE)
+```
