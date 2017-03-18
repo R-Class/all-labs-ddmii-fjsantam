@@ -21,6 +21,7 @@ Load the necessary packages.
 #library( ggmap )
 #library( jsonlite )
 library( maptools )
+library( measurements )
 #library( memisc )
 #library( RCurl )
 library( raster )
@@ -180,7 +181,8 @@ class( interstate.cropped )
 # To make accurate buffers, use a variant of this:
 proj4string( interstate.cropped ) = CRS("+proj=longlat +datum=WGS84") # set it to lat-long
 #interstate.projected <- spTransform( interstate.cropped, CRS( "+init=epsg:3347" ) ) 
-interstate.projected <- spTransform( interstate.cropped, CRS( "+proj=longlat +datum=WGS84" ) ) 
+interstate.projected.US <- spTransform( interstate.cropped, CRS( "+proj=longlat +datum=NAD83" ) )
+#interstate.projected <- spTransform( interstate.cropped, proj4string=CRS( "+proj=longlat +datum=WGS84" ) ) 
 #gridded( interstate.projected ) = TRUE
 rtest = raster( interstate.projected )
 plot(rtest)
@@ -188,16 +190,21 @@ plot(rtest)
 interstate.projected <- spTransform( interstate.cropped, CRS( "+init=epsg:3347" ) ) 
 coordinates(interstate.projected)
 
+class( interstate.projected )
+
 # Approximate Buffer
-buff1 <- gBuffer(
+buffhwy <- gBuffer(
   interstate.cropped,
-  width = 0.001, # width of buffer
+  #interstate.projected,
+  #width = 0.001, # width of buffer
+  width = 0.005, # width of buffer
   byid = FALSE # applied across "subgeometries"   IF you do FALSE, will automatically create a dissolved buffer
 )
-buff1 <- SpatialPolygonsDataFrame( buff1, data=buff1@data)
-class( buff1 )
-str(buff1)
-plot( buff1, add=T)
+class( buffhwy )
+# buffhwy <- SpatialPolygonsDataFrame( buffhwy, data=buffhwy@data)
+class( buffhwy )
+str( buffhwy )
+plot( buffhwy, add=T)
 
 
 # proj4string(buff1)=CRS("+proj=longlat +datum=WGS84")
@@ -206,14 +213,50 @@ plot( buff1, add=T)
 
 #### Identify all houses that fall within the buffer zone
 ```{r}
-dat <- read.csv( "https://raw.githubusercontent.com/lecy/maps-in-R/master/Data/syr_parcels.csv" )
+#dat <- read.csv( "https://raw.githubusercontent.com/lecy/maps-in-R/master/Data/syr_parcels.csv" )
+dat <- read.csv( "https://raw.githubusercontent.com/R-Class/all-labs-ddmii-fjsantam/master/Lab%2006/data.csv" )
+# For the code used to generate the raw CSV file above, refer to Lab_06_-_Geocoding_CSV_Script_FJS.Rmd in the Lab 06 folder on GitHub
 names( dat )
+nrow( dat )
 
+# Convert the coordinates that are in lon (x) lat(y) order to spatial points, identifying the coordinates, data, and coordinate system
+xy <- dat[ c( "lon", "lat") ]
+spdat <- SpatialPointsDataFrame( xy, dat, proj4string=CRS("+proj=longlat +datum=WGS84")  )
+class( spdat )
+points( spdat )
+nrow( spdat )
+
+# Function is: over( locations, layer )
+homes.on.highway <- over( spdat, buffhwy )
+class( homes.on.highway)
+
+# buff1 is a SpatialPolygon; dat is a dataframe
+# will return a list of points (top row) and which polygon they are in (represented by ID # or NA if not in one)
+honh.logical <- homes.on.highway[is.na(homes.on.highway)]
+
+honh.logical <- as.character(homes.on.highway) != "NA"
+honh.logical[ is.na(honh.logical) ] <- FALSE
+class( honh.logical )
 ```
 
 
 #### Add a new categorical variable to the houses dataset: within buffer zone or not?
 ```{r}
+dat <- as.data.frame( dat )
+dat.buffer <- cbind( dat, honh.logical )
+
+head( dat.buffer )
+nrow( dat.buffer )
+```
+
+
+#### Compile the Map
+```{r}
+par( mar=c(0,0,0,0) )
+plot( syr.sub,  border="gray80" )
+plot( roads.cropped, col="steelblue", lwd=1, add=T )
+plot( buffhwy, add=T)
+plot( interstate.cropped, col="red", add=T )
 
 ```
 
