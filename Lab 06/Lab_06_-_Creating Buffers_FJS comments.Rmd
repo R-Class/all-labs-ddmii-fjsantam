@@ -79,17 +79,6 @@ class( roads )
 
 #### Create a polygon outline
 ```{r}
-### Get census tracts FIPS, grab all ids of 1-61, dissolve the polygons to get the outline
-setwd( "~/Graduate School/PAI 690 Independent Study_DDM II/Labs/shapefiles" )
-#download.file("ftp://ftp2.census.gov/geo/tiger/TIGER2010/TRACT/2010/tl_2010_36067_tract10.zip", "onondaga census tracts.zip" )
-#unzip( "onondaga census tracts.zip" )
-#file.remove( "onondaga census tracts.zip" )
-dir()
-#syr2 <- readShapePoly( fn="01-05-2015", 
-#         proj4string=CRS("+proj=longlat +datum=WGS84") 
-#         )
-#head( syr2@data) #returns the output of a list of values in syr2 map data
-#syr2.subset <- syr2[ as.numeric(as.character(syr2$CensusTrac)) < 62 && as.numeric(as.character(syr2$CensusTrac)) > 0 ]
 head( syr@data )
 names( syr )
 table( syr$GEOID10 )
@@ -225,7 +214,6 @@ plot( buffhwy2, add=T)
 
 #### Identify all houses that fall within the buffer zone
 ```{r}
-#dat <- read.csv( "https://raw.githubusercontent.com/lecy/maps-in-R/master/Data/syr_parcels.csv" )
 dat <- read.csv( "https://raw.githubusercontent.com/R-Class/all-labs-ddmii-fjsantam/master/Lab%2006/data.csv" )
 # For the code used to generate the raw CSV file above, refer to Lab_06_-_Geocoding_CSV_Script_FJS.Rmd in the Lab 06 folder on GitHub
 names( dat )
@@ -235,6 +223,7 @@ nrow( dat )
 xy <- dat[ c( "lon", "lat") ]
 spdat <- SpatialPointsDataFrame( xy, dat, proj4string=CRS("+proj=longlat +datum=WGS84")  )
 class( spdat )
+head( spdat )
 points( spdat )
 nrow( spdat )
 
@@ -256,9 +245,12 @@ class( honh.logical )
 ```{r}
 dat <- as.data.frame( dat )
 dat.buffer <- cbind( dat, honh.logical )
-
 head( dat.buffer )
 nrow( dat.buffer )
+
+dat.hwy.buffer <- dat.buffer[ dat.buffer$honh.logical == TRUE, ]
+nrow( dat.hwy.buffer )
+head(dat.hwy.buffer)
 ```
 
 
@@ -267,21 +259,95 @@ nrow( dat.buffer )
 par( mar=c(0,0,0,0) )
 plot( syr.sub,  border="gray80" )
 plot( roads.cropped, col="steelblue", lwd=1, add=T )
-plot( buffhwy, add=T)
+#plot( buffhwy, add=T)
 plot( interstate.cropped, col="red", add=T )
-
+points( spdat, cex = 0.5 )
+points( x=dat.hwy.buffer$lon, y=dat.hwy.buffer$lat, pch=19, col="magenta" )
 ```
 
 
 ## Part 2
 
 #### Create a buffer a quarter mile from industrial zones (LandUse) and plot the buffer zone
+#### Redo this using the original map file and geocoding addresses in the parcels file, instead of the syr2 shapefile
+There seem to be incompatibility issues with UTM and the other CRS system, given how they plot coordinates?
 ```{r}
+#parcels <- read.csv( "https://raw.githubusercontent.com/lecy/maps-in-R/master/Data/syr_parcels.csv" )
+#names(parcels)
+#unique( parcels$LandUse )
 
+### Get census tracts FIPS, grab all ids of 1-61, dissolve the polygons to get the outline
+setwd( "~/Graduate School/PAI 690 Independent Study_DDM II/Labs/shapefiles" )
+# download.file("ftp://ftp2.census.gov/geo/tiger/TIGER2010/TRACT/2010/tl_2010_36067_tract10.zip", "onondaga census tracts.zip" )
+# unzip( "onondaga census tracts.zip" )
+# file.remove( "onondaga census tracts.zip" )
+dir()
+syr2 <- readShapePoly( fn="01-05-2015", 
+         #proj4string=CRS("+proj=longlat +datum=WGS84") 
+         proj4string=CRS( "+proj=utm +zone=18 +datum=WGS84" ) 
+         )
+head( syr2@data) #returns the output of a list of values in syr2 map data
+class(syr2)
+
+landUseInd <- syr2[ syr2$LandUse == "Industrial", ]
+class(landUseInd)
+
+
+# Approximate Buffer
+buffindzone <- gBuffer(
+  landUseInd,
+  #width = 0.001, # width of buffer
+  #width = 400, # width of buffer
+  width = 2400, # expanding to play nice with the 189-house dataset
+  byid = FALSE # applied across "subgeometries"   IF you do FALSE, will automatically create a dissolved buffer
+)
+class( buffindzone )
+
+par( mar=c(0,0,0,0) )
+plot( syr2,  border="gray80" )
+plot( buffindzone, add=T)
 ```
 
 #### Identify houses within the buffer zones and create a categorical variable in the dataset indicating proximity to industrial zones
 ```{r}
+# Convert the housing data to use the same CRS system
+
+spdat2 <- spTransform( 
+  spdat, # source polygon
+  CRS( "+proj=utm +zone=18 +datum=WGS84" ) # use the UTM projection, Syracuse is in Zone 18
+  )
+head(spdat2)
+nrow(spdat2)
+
+# Function is: over( locations, layer )
+homes.in.ind <- over( spdat2, buffindzone )
+class( homes.in.ind)
+
+# buff1 is a SpatialPolygon; dat is a dataframe
+# will return a list of points (top row) and which polygon they are in (represented by ID # or NA if not in one)
+hini.logical <- homes.in.ind[is.na(homes.in.ind)]
+
+hini.logical <- as.character(homes.in.ind) != "NA"
+hini.logical[ is.na(hini.logical) ] <- FALSE
+class( hini.logical )
+
+#############
+# Add to the dataset
+dat.buffer <- cbind( dat.buffer, hini.logical )
+head( dat.buffer )
+nrow( dat.buffer )
+
+dat.ind.buffer <- dat.buffer[ dat.buffer$hini.logical == TRUE, ]
+nrow( dat.ind.buffer )
+head(dat.ind.buffer)
+
+
+
+plot( syr2,  border="gray80" )
+plot( roads.cropped, col="steelblue", lwd=1, add=T )
+#plot( buffhwy, add=T)
+points( x=spdat2$lon, y=spdat2$lat, cex = 0.5 )
+points( x=dat.ind.buffer$lon, y=dat.ind.buffer$lat, pch=19, col="magenta" )
 
 ```
 
