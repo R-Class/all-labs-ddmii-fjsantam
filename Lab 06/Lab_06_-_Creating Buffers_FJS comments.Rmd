@@ -178,19 +178,10 @@ class( interstate.cropped )
 
 #### Create a buffer of approximately a quarter mile from the interstate
 ```{r}
-# To make accurate buffers, use a variant of this:
-proj4string( interstate.cropped ) = CRS("+proj=longlat +datum=WGS84") # set it to lat-long
 #interstate.projected <- spTransform( interstate.cropped, CRS( "+init=epsg:3347" ) ) 
-interstate.projected.US <- spTransform( interstate.cropped, CRS( "+proj=longlat +datum=NAD83" ) )
-#interstate.projected <- spTransform( interstate.cropped, proj4string=CRS( "+proj=longlat +datum=WGS84" ) ) 
-#gridded( interstate.projected ) = TRUE
-rtest = raster( interstate.projected )
-plot(rtest)
+#coordinates(interstate.projected)
 
-interstate.projected <- spTransform( interstate.cropped, CRS( "+init=epsg:3347" ) ) 
-coordinates(interstate.projected)
-
-class( interstate.projected )
+#class( interstate.projected )
 
 # Approximate Buffer
 buffhwy <- gBuffer(
@@ -207,7 +198,28 @@ str( buffhwy )
 plot( buffhwy, add=T)
 
 
-# proj4string(buff1)=CRS("+proj=longlat +datum=WGS84")
+# Accurate Buffer
+# To make accurate buffers, use a variant of this code.
+# Units: https://gis.stackexchange.com/questions/85300/units-of-gbuffer-from-rgeos-package
+# Projection to use: https://www.nceas.ucsb.edu/~frazier/RSpatialGuides/OverviewCoordinateReferenceSystems.pdf
+interstate.projected.US <- spTransform( 
+  interstate.cropped, # source polygon
+  CRS( 
+    "+proj=utm +zone=18 +datum=WGS84" ) # use the UTM projection, Syracuse is in Zone 18
+  )
+
+unit <- conv_unit( 10, "mi", "m" ) # converts from 0.25 mi to meters, the unit of UTM
+buffhwy2 <- gBuffer(
+    interstate.projected.US,
+    #interstate.projected,
+    #width = 0.001, # width of buffer
+    width = unit,
+    byid = FALSE # applied across "subgeometries"   IF you do FALSE, will automatically create a dissolved buffer
+  )
+class( buffhwy2 )
+# buffhwy <- SpatialPolygonsDataFrame( buffhwy, data=buffhwy@data)
+str( buffhwy2 )
+plot( buffhwy2, add=T)
 
 ```
 
