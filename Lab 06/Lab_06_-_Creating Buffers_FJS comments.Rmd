@@ -214,17 +214,17 @@ plot( buffhwy2, add=T)
 
 #### Identify all houses that fall within the buffer zone
 ```{r}
-dat <- read.csv( "https://raw.githubusercontent.com/R-Class/all-labs-ddmii-fjsantam/master/Lab%2006/data.csv" )
+zdat <- read.csv( "https://raw.githubusercontent.com/R-Class/all-labs-ddmii-fjsantam/master/Lab%2006/zillowdata.csv" )
 # For the code used to generate the raw CSV file above, refer to Lab_06_-_Geocoding_CSV_Script_FJS.Rmd in the Lab 06 folder on GitHub
-names( dat )
-nrow( dat )
+names( zdat )
+nrow( zdat )
 
 # Convert the coordinates that are in lon (x) lat(y) order to spatial points, identifying the coordinates, data, and coordinate system
-xy <- dat[ c( "lon", "lat") ]
-spdat <- SpatialPointsDataFrame( xy, dat, proj4string=CRS("+proj=longlat +datum=WGS84")  )
+zcoor <- zdat[ c( "lon", "lat") ]
+spdat <- SpatialPointsDataFrame( zcoor, zdat, proj4string=CRS("+proj=longlat +datum=WGS84")  )
 class( spdat )
 head( spdat )
-points( spdat )
+#points( spdat )
 nrow( spdat )
 
 # Function is: over( locations, layer )
@@ -270,7 +270,9 @@ points( x=dat.hwy.buffer$lon, y=dat.hwy.buffer$lat, pch=19, col="magenta" )
 
 #### Create a buffer a quarter mile from industrial zones (LandUse) and plot the buffer zone
 #### Redo this using the original map file and geocoding addresses in the parcels file, instead of the syr2 shapefile
-There seem to be incompatibility issues with UTM and the other CRS system, given how they plot coordinates?
+*Note*: To get an accurate buffer zone away from industrial zones, the polygon would have to be read in as a projection of UTM. But the data is in long-lat coordinates. I am unsure how to convert long-lat coordinates for a property to UTM coordinates. Without this conversion, the buffer will have to be an estimate rather than an accurate representation.
+
+Issues:
 ```{r}
 #parcels <- read.csv( "https://raw.githubusercontent.com/lecy/maps-in-R/master/Data/syr_parcels.csv" )
 #names(parcels)
@@ -283,17 +285,61 @@ setwd( "~/Graduate School/PAI 690 Independent Study_DDM II/Labs/shapefiles" )
 # file.remove( "onondaga census tracts.zip" )
 dir()
 syr2 <- readShapePoly( fn="01-05-2015", 
-         #proj4string=CRS("+proj=longlat +datum=WGS84") 
-         proj4string=CRS( "+proj=utm +zone=18 +datum=WGS84" ) 
+         #Approximate:
+         proj4string=CRS("+proj=longlat +datum=WGS84") 
+         #Accurate:
+         #proj4string=CRS( "+proj=utm +zone=18 +datum=WGS84" ) 
          )
 head( syr2@data) #returns the output of a list of values in syr2 map data
 class(syr2)
 
 landUseInd <- syr2[ syr2$LandUse == "Industrial", ]
 class(landUseInd)
+#unique(syr2$LandUse)
+```
+
+Converting 
+```{r}
+LongLatToUTM <- function( x, y, zone){
+  xy <- data.frame( ID = 1:length(x), X = x, Y = y)
+  coordinates( xy ) <- c( "X", "Y" )
+  proj4string( xy ) <- CRS( "+proj=longlat +datum=WGS84" )
+  res <- spTransform( xy, CRS( paste( "+proj=utm +zone=",zone,"ellps=WGS84", sep = '') ) )
+  return( as.data.frame( res ) )
+}
+# Create a vector of the UTM values
+spUTMdat <- LongLatToUTM( spdat$lon, spdat$lat, 18 )
+class(spUTMdat)
+head( spUTMdat )
+nrow(spUTMdat)
+
+# Transform the vector into an object of class SpatialPoints
+spUTMcoor <- SpatialPoints(
+  spUTMdat, 
+  CRS( "+proj=utm +zone=18 +datum=WGS84" ) # use the UTM projection, Syracuse is in Zone 18
+  )
+class( spUTMcoor)
 
 
+syr2acc <- readShapePoly( fn="01-05-2015", 
+         #Approximate:
+         #proj4string=CRS("+proj=longlat +datum=WGS84") 
+         #Accurate:
+         proj4string=CRS( "+proj=utm +zone=18 +datum=WGS84" ) 
+         )
+head( syr2acc@data) #returns the output of a list of values in syr2 map data
+class(syr2acc)
+
+landUseIndacc <- syr2acc[ syr2acc$LandUse == "Industrial", ]
+class(landUseIndacc)
+```
+
+##### Creating Buffers
+```{r}
 # Approximate Buffer
+
+syr2 <- spTransform( syr2, CRS)
+
 buffindzone <- gBuffer(
   landUseInd,
   #width = 0.001, # width of buffer
@@ -303,15 +349,31 @@ buffindzone <- gBuffer(
 )
 class( buffindzone )
 
+# Accurate Buffer
+
+buffindzoneacc <- gBuffer(
+  landUseIndacc,
+  #width = 0.001, # width of buffer
+  #width = 400, # width of buffer
+  width = 2400, # expanding to play nice with the 189-house dataset
+  byid = FALSE # applied across "subgeometries"   IF you do FALSE, will automatically create a dissolved buffer
+)
+class( buffindzoneacc )
+
+
 par( mar=c(0,0,0,0) )
 plot( syr2,  border="gray80" )
 plot( buffindzone, add=T)
+
 ```
+
+
 
 #### Identify houses within the buffer zones and create a categorical variable in the dataset indicating proximity to industrial zones
 ```{r}
-# Convert the housing data to use the same CRS system
+#Accurate Version
 
+# Convert the housing data to use the same CRS system
 spdat2 <- spTransform( 
   spdat, # source polygon
   CRS( "+proj=utm +zone=18 +datum=WGS84" ) # use the UTM projection, Syracuse is in Zone 18
@@ -320,7 +382,8 @@ head(spdat2)
 nrow(spdat2)
 
 # Function is: over( locations, layer )
-homes.in.ind <- over( spdat2, buffindzone )
+#homes.in.ind <- over( spdat2, buffindzone )
+homes.in.ind <- over( spUTMcoor, buffindzone )
 class( homes.in.ind)
 
 # buff1 is a SpatialPolygon; dat is a dataframe
@@ -331,8 +394,23 @@ hini.logical <- as.character(homes.in.ind) != "NA"
 hini.logical[ is.na(hini.logical) ] <- FALSE
 class( hini.logical )
 
-#############
-# Add to the dataset
+# Approximate Version
+
+# Function is: over( locations, layer )
+homes.in.ind <- over( spdat, buffindzone )
+class( homes.in.ind)
+
+# buff1 is a SpatialPolygon; dat is a dataframe
+# will return a list of points (top row) and which polygon they are in (represented by ID # or NA if not in one)
+hini.logical <- homes.in.ind[is.na(homes.in.ind)]
+
+hini.logical <- as.character(homes.in.ind) != "NA"
+hini.logical[ is.na(hini.logical) ] <- FALSE
+class( hini.logical )
+
+
+
+############# Add to the dataset #############
 dat.buffer <- cbind( dat.buffer, hini.logical )
 head( dat.buffer )
 nrow( dat.buffer )
@@ -340,14 +418,17 @@ nrow( dat.buffer )
 dat.ind.buffer <- dat.buffer[ dat.buffer$hini.logical == TRUE, ]
 nrow( dat.ind.buffer )
 head(dat.ind.buffer)
+dat.not.ind.buffer <- dat.buffer[ dat.buffer$hini.logical == FALSE, ]
+nrow( dat.not.ind.buffer )
 
 
-
+# Plot the map, overlaying roads, houses, and houses within the industrial zones
 plot( syr2,  border="gray80" )
 plot( roads.cropped, col="steelblue", lwd=1, add=T )
 #plot( buffhwy, add=T)
-points( x=spdat2$lon, y=spdat2$lat, cex = 0.5 )
-points( x=dat.ind.buffer$lon, y=dat.ind.buffer$lat, pch=19, col="magenta" )
+points( x=spdat2$lon, y=spdat2$lat, cex = 0.5, col = "grey" )
+points( x=dat.ind.buffer$lon, y=dat.ind.buffer$lat, pch=19, col="orange" )
+# points( x=dat.not.ind.buffer$lon, y=dat.not.ind.buffer$lat, pch=19, col="grey" )
 
 ```
 
