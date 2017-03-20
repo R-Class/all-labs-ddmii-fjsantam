@@ -16,7 +16,7 @@ knitr::opts_chunk$set( message=F, warning=F )
 ## Load Necessary Packages
 
 ```{r}
-# Set working directors
+# Set working directories
 setwd("~/GitHub/all-labs-ddmii-fjsantam/Lab 06")
 
 # Load packages
@@ -75,5 +75,5 @@ lat.long <- geocode( addresses )
 
 dat <- cbind( dat, lat.long )
 
-write.csv(dat, "data.csv", row.names=FALSE)
+write.csv(dat, "zillowdata.csv", row.names=FALSE)
 ```

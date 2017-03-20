@@ -1,0 +1,65 @@
+---
+title: "Lab 06 - Creating Buffers"
+author: "Francisco Santamarina"
+date: "March 09, 2017"
+output:
+  html_document:
+    df_print: paged
+    keep_md: true
+
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set( message=F, warning=F )
+```
+
+## Load Necessary Packages
+
+```{r}
+# Set working directories
+setwd("~/GitHub/all-labs-ddmii-fjsantam/Lab 06")
+
+# Load packages
+library( RCurl )
+library( ggmap )
+# dir()
+```
+
+
+
+## Load the Data
+
+```{r}
+# Read in the data
+dat <- read.csv( "https://raw.githubusercontent.com/lecy/maps-in-R/master/Data/syr_parcels.csv" )
+# Show the structure of the object
+#str( dat )
+```
+
+
+## Convert the Data into Lat-Lon Coordinates
+
+```{r}
+# Compile address info
+houses <- dat[ , c("Add3","Add4","ZIP") ]
+head( houses )
+nrow( houses )
+
+# Limit addresses to Syracuse, NY
+houses <- houses[ houses$Add4 == "SYRACUSE  NY", ]
+nrow(houses)
+
+# Combine the strings in this order: Address, City, State, Zip. Separate with comma and space
+addresses <- paste( houses$Add3, houses$Add4, houses$ZIP, sep=", " )
+#str( addresses )
+
+# Translate the address strings to latitude and longitude coordinates
+lat.long <- geocode( addresses )
+# This will geocode for 33,854 addresses. It will throw an error because google restricts requests to 2500/day for non-business use.
+# Cool info on batching here: http://www.shanelynn.ie/massive-geocoding-with-r-and-google-maps/
+#str( lat.long )
+
+dat <- cbind( dat, lat.long )
+
+write.csv(dat, "parcelsdata.csv", row.names=FALSE)
+```
