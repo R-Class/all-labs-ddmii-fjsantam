@@ -56,7 +56,7 @@ dat$sqft <- as.numeric( gsub( ",","", dat$sqft ) )
 dat$lot.size[ is.na( dat$lot.size ) ] <- mean( dat$lot.size, na.rm=T )
 
 
-# Remove variables that ar eno longer needed
+# Remove variables that are no longer needed
 
 rm( zillowdatlocation )
 rm( zillowdat.raw )
