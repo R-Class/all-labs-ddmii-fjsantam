@@ -20,6 +20,7 @@ Load the necessary packages.
 #library( censusAPI)
 #library( ggmap )
 #library( jsonlite )
+library( maps )
 library( maptools )
 library( measurements )
 #library( memisc )
@@ -243,7 +244,7 @@ class( honh.logical )
 
 #### Add a new categorical variable to the houses dataset: within buffer zone or not?
 ```{r}
-dat <- as.data.frame( dat )
+dat <- as.data.frame( zdat )
 dat.buffer <- cbind( dat, honh.logical )
 head( dat.buffer )
 nrow( dat.buffer )
@@ -295,11 +296,19 @@ class(syr2)
 
 landUseInd <- syr2[ syr2$LandUse == "Industrial", ]
 class(landUseInd)
+landUseNotInd <- syr2[ syr2$LandUse != "Industrial", ]
 #unique(syr2$LandUse)
+
+par( mar=c(0,0,0,0) )
+plot( landUseNotInd, col = "grey", border = F )
+plot( landUseInd, col = "orange", border = F, add = T )
 ```
 
 Converting 
 ```{r}
+# https://stackoverflow.com/questions/18639967/converting-latitude-and-longitude-points-to-utm
+# See the answer posted by Stanislav
+
 LongLatToUTM <- function( x, y, zone){
   xy <- data.frame( ID = 1:length(x), X = x, Y = y)
   coordinates( xy ) <- c( "X", "Y" )
@@ -342,9 +351,13 @@ syr2 <- spTransform( syr2, CRS)
 
 buffindzone <- gBuffer(
   landUseInd,
-  #width = 0.001, # width of buffer
-  #width = 400, # width of buffer
-  width = 2400, # expanding to play nice with the 189-house dataset
+  # width = 0.001, # width of buffer
+  # width = 400, # width of buffer
+  # width = 2400, # expanding to play nice with the 189-house dataset
+  #width = 0.003621,
+  width = 3600,
+  capStyle = "FLAT",
+  quadsegs = 1,
   byid = FALSE # applied across "subgeometries"   IF you do FALSE, will automatically create a dissolved buffer
 )
 class( buffindzone )
@@ -361,9 +374,71 @@ buffindzoneacc <- gBuffer(
 class( buffindzoneacc )
 
 
-par( mar=c(0,0,0,0) )
-plot( syr2,  border="gray80" )
-plot( buffindzone, add=T)
+#plot( syr2,  border="gray80" )
+plot( buffindzone, add=T, col=rgb(44,4,248,alpha=50, maxColorValue = 355))
+map.scale( metric=F, ratio=F, relwidth=0.15, cex=0.5)
+
+```
+
+# Create a vector that contains the addresses present in both the Syracuse polygon and the Zillow data
+```{r}
+# https://stackoverflow.com/questions/16516593/convert-from-lowercase-to-uppercase-all-values-in-all-character-variables-in-dat
+# See answer posted by juba
+
+upCase <- function(v) {
+  if( is.character(v)) return(toupper(v))
+  else return(v)
+}
+
+
+test.syr2 <- c( syr2$Add3, syr2$Add4, syr2$ZIP)
+#test.syr2 <- c( syr2$Add3, syr2$Add4 )
+test.syr2 <- paste( syr2$Add3, syr2$Add4, syr2$ZIP, sep=", " )
+#test.syr2 <- paste( syr2$Add3, syr2$Add4, sep=", " )
+class( test.syr2 )
+head( test.syr2 )
+test.spdat <- paste( spdat$address, "Syracuse  NY", spdat$zip, sep=", " )
+#test.spdat <- paste( spdat$address, "Syracuse  NY", sep=", " )
+test.spdat <- upCase( test.spdat )
+head( test.spdat )
+
+#data.frame( lapply( df, upCase(test.spdat) ) )
+
+test.match <- match( upCase( as.character( spdat$address ) ), as.character( syr2$Add3 ) )
+test.match <- match( test.spdat, test.syr2 )
+table( test.match )
+summary(test.match)
+
+
+
+test2.syr2 <- syr2$Add3
+test2.syr2 <- as.character(test2.syr2)
+head(test2.syr2)
+
+test2.spdat <- spdat$address
+test2.spdat <- as.character( test2.spdat)
+test2.spdat <- upCase( test2.spdat )
+head(test2.spdat)
+
+
+test2.match <- match( test2.spdat, test2.syr2 )
+table(test2.match)
+test2.merge <- merge( spdat, syr2, by.x = upCase(as.character( spdat$address ) ), by.y = as.character( syr2$Add3 )  )
+head(test2.merge)
+
+
+
+
+## Create a subset of syr2 for only the addresses that are found in spdat
+test2.spdat <- as.factor(test2.spdat)
+class(test2.spdat)
+head(test2.spdat)
+
+spdat.syr2 <- syr2[ syr2$Add3 %in% test2.spdat, ]
+cleanedAddresses <- spdat.syr2$Add3
+# spdat.syr2 <- match( upCase(as.character( spdat$address ) ), as.character( syr2$Add3 ) )
+head( spdat.syr2 )
+nrow( spdat.syr2 )
 
 ```
 
@@ -371,6 +446,10 @@ plot( buffindzone, add=T)
 
 #### Identify houses within the buffer zones and create a categorical variable in the dataset indicating proximity to industrial zones
 ```{r}
+  
+points( x = spdat$lon, y = spdat$lat, pch = 19 )
+
+
 #Accurate Version
 
 # Convert the housing data to use the same CRS system
@@ -397,7 +476,7 @@ class( hini.logical )
 # Approximate Version
 
 # Function is: over( locations, layer )
-homes.in.ind <- over( spdat, buffindzone )
+homes.in.ind <- over( spdat.syr2, buffindzone )
 class( homes.in.ind)
 
 # buff1 is a SpatialPolygon; dat is a dataframe
@@ -411,7 +490,11 @@ class( hini.logical )
 
 
 ############# Add to the dataset #############
-dat.buffer <- cbind( dat.buffer, hini.logical )
+proper=function(s) gsub("(?<=\\b)([a-z])","\\U\\1",tolower(s), perl=T)
+cleanedAddresses <- proper(cleanedAddresses)
+cleanedAddresses <- as.factor(cleanedAddresses)
+dat.buffer.syr2 <- dat.buffer[ upCase(dat.buffer$address) %in% cleanedAddresses, ]
+dat.buffer <- cbind( dat.buffer.syr2, hini.logical )
 head( dat.buffer )
 nrow( dat.buffer )
 
