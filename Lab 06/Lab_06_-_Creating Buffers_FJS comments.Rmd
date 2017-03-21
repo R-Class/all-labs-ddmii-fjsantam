@@ -362,6 +362,12 @@ buffindzone <- gBuffer(
 )
 class( buffindzone )
 
+buffindzone <- spTransform( 
+  buffindzone, # source polygon
+  CRS( "+proj=longlat +datum=WGS84" )
+  )
+
+
 # Accurate Buffer
 
 buffindzoneacc <- gBuffer(
@@ -450,7 +456,7 @@ nrow( spdat.syr2 )
 points( x = spdat$lon, y = spdat$lat, pch = 19 )
 
 
-#Accurate Version
+# Accurate Version
 
 # Convert the housing data to use the same CRS system
 spdat2 <- spTransform( 
@@ -490,6 +496,9 @@ class( hini.logical )
 
 
 ############# Add to the dataset #############
+
+# https://stackoverflow.com/questions/24956546/capitalizing-letters-r-equivalent-of-excel-proper-function
+# See the answer by Matthew Plourde
 proper=function(s) gsub("(?<=\\b)([a-z])","\\U\\1",tolower(s), perl=T)
 cleanedAddresses <- proper(cleanedAddresses)
 cleanedAddresses <- as.factor(cleanedAddresses)

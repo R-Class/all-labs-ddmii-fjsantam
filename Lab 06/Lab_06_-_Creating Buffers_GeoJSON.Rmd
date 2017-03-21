@@ -1,0 +1,456 @@
+---
+title: "Lab 06 - Creating Buffers"
+author: "Francisco Santamarina"
+date: "March 09, 2017"
+output:
+  html_document:
+    df_print: paged
+    keep_md: true
+
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set( message=F, warning=F )
+```
+
+Load the necessary packages.
+```{r}
+#library( censusAPI)
+library( geojsonio )
+#library( ggmap )
+#library( jsonlite )
+library( maps )
+library( maptools )
+library( measurements )
+#library( memisc )
+#library( RCurl )
+library( raster )
+library( rgdal )
+library( rgeos )
+library( sp )
+#library( spatialEco ) 
+
+```
+
+## Part 1: Tracts with TIGER Files
+
+Load and clean the necessary dataset.
+```{r}
+# Set the working directory
+#setwd( "//hd.ad.syr.edu/02/7796a1/Documents/Desktop/DDM/DDM II/Lab 06" )
+setwd("~/Graduate School/PAI 690 Independent Study_DDM II/Labs/Lab 06_Buffers")
+#dir.create( "shapefiles" )
+setwd( "./shapefiles" )
+
+
+# Download shapefiles
+download.file("ftp://ftp2.census.gov/geo/tiger/TIGER2010/TRACT/2010/tl_2010_36067_tract10.zip", "onondaga census tracts.zip" )
+unzip( "onondaga census tracts.zip" )
+file.remove( "onondaga census tracts.zip" )
+dir()
+
+
+# Load and plot shapefiles
+syr <- readShapePoly( fn="tl_2010_36067_tract10", proj4string=CRS("+proj=longlat +datum=WGS84") )
+
+par( mar=c(0,0,0,0) )
+plot( syr,  border="gray10" )
+
+
+# Add roads
+
+download.file("ftp://ftp2.census.gov/geo/tiger/TIGER2015/PRISECROADS/tl_2015_36_prisecroads.zip", "primary_and_secondary_roads.zip" )
+
+unzip( "primary_and_secondary_roads.zip" )
+file.remove( "primary_and_secondary_roads.zip" )
+dir()
+
+roads <- readShapeLines( fn="tl_2015_36_prisecroads", proj4string=CRS("+proj=longlat +datum=WGS84") )
+
+head( roads@data )
+table( roads$RTTYP )
+class( roads )
+#RTTYP = Road Type Code
+# C = county
+# I = interstate
+# M = Common Name
+# O = other
+# S = state recognized
+# U = U.S.
+```
+
+#### Create a polygon outline
+```{r}
+head( syr@data )
+names( syr )
+table( syr$GEOID10 )
+str( syr$TRACTCE10 )
+
+# Plot only the tracts within the city
+# 0 or 1 in the 7th position of the FIPS ID string seem to differentiate city vs rural
+# OR only looking at the last 4 is insufficient for a 3-digit census tract ID
+
+last5tract <- unique(substr(syr$GEOID10, 7,11))
+table(last5tract)
+syr.sub <- syr[ (as.numeric(substr(syr$GEOID10, 7,11)) < 06200 ) & (as.numeric(substr(syr$GEOID10, 7,11)) > 0), ]
+head(syr.sub)
+plot(syr.sub)
+class( syr.sub )
+```
+
+
+#### Clip Roads down to same size as census tracts
+```{r}
+# Using gClip() to do a modified subsetting of geospatial points/lines
+# http://robinlovelace.net/r/2014/07/29/clipping-with-r.html
+# rgeos version: 0.3-5, (SVN revision 447)
+#  GEOS runtime version: 3.4.2-CAPI-1.8.2 r3921 
+#  Polygon checking: TRUE
+
+gClip <- function(shp, bb){  #shp = shapefile, bb = bounding box
+  if(class(bb) == "matrix") b_poly <- as(extent(as.vector(t(bb))), "SpatialPolygons")
+  else b_poly <- as(extent(bb), "SpatialPolygons")
+  gIntersection(shp, b_poly, byid = T)
+}
+
+roads.clipped <- gClip(roads, syr)
+#this returns a BOX that has the roads limited within it
+plot( roads.clipped )
+str( roads.clipped )
+class( roads.clipped )
+# Clip is computationally expensive, has to determine what to do with the polygons destroyed in the clip
+
+# use intersect instead of gClip and syr.sub
+## source: https://gis.stackexchange.com/questions/23931/how-to-intersect-lines-and-polygons-in-r
+## author: xhie                library(raster)
+## newLines <- raster::intersect(SpatialLinesDataframe, SpatialPolygonDataframe)
+# raster::intersect is a way to access intersect within package raster. Loads the package without attaching it.
+roads.cropped <- intersect( roads, syr.sub )
+plot( roads.cropped )
+str( roads.cropped )
+class( roads.cropped )
+table( roads.cropped$RTTYP )
+
+```
+
+
+#### Extract the interstates as a separate layer
+```{r}
+#subset()
+
+# Using roads.clipped
+
+par( mar=c(0,0,0,0) )
+plot( syr,  border="gray80" )
+#plot( roads, col="steelblue", lwd=2, add=T )
+plot( roads.clipped, col="steelblue", lwd=1, add=T )
+
+#interstate <- roads[ roads$RTTYP == "I", ]
+interstate1 <- roads.clipped[ roads.clipped$RTTYP == "I", ]
+interstate.clipped <- gClip( interstate, syr )
+#this returns a BOX that has the interstates limited within it
+plot( interstate.clipped, col="red", add=T )
+
+
+
+# Using roads.cropped
+
+par( mar=c(0,0,0,0) )
+plot( syr.sub,  border="gray80" )
+#plot( roads, col="steelblue", lwd=2, add=T )
+plot( roads.cropped, col="steelblue", lwd=1, add=T )
+
+#interstate <- roads[ roads$RTTYP == "I", ]
+interstate2 <- roads.cropped[ roads.cropped$RTTYP == "I", ]
+interstate.cropped <- intersect( interstate2, syr.sub )
+
+plot( interstate.cropped, col="red", add=T )
+class( interstate.cropped )
+```
+
+#### Create a buffer of approximately a quarter mile from the interstate
+```{r}
+#interstate.projected <- spTransform( interstate.cropped, CRS( "+init=epsg:3347" ) ) 
+#coordinates(interstate.projected)
+
+#class( interstate.projected )
+
+# Approximate Buffer
+buffhwy <- gBuffer(
+  interstate.cropped,
+  #interstate.projected,
+  #width = 0.001, # width of buffer
+  width = 0.005, # width of buffer
+  byid = FALSE # applied across "subgeometries"   IF you do FALSE, will automatically create a dissolved buffer
+)
+class( buffhwy )
+# buffhwy <- SpatialPolygonsDataFrame( buffhwy, data=buffhwy@data)
+str( buffhwy )
+plot( buffhwy, add=T)
+
+
+# Accurate Buffer
+# To make accurate buffers, use a variant of this code.
+# Units: https://gis.stackexchange.com/questions/85300/units-of-gbuffer-from-rgeos-package
+# Projection to use: https://www.nceas.ucsb.edu/~frazier/RSpatialGuides/OverviewCoordinateReferenceSystems.pdf
+interstate.projected.US <- spTransform( 
+  interstate.cropped, # source polygon
+  CRS( 
+    "+proj=utm +zone=18 +datum=WGS84" ) # use the UTM projection, Syracuse is in Zone 18
+  )
+
+unit <- conv_unit( 10, "mi", "m" ) # converts from 0.25 mi to meters, the unit of UTM
+buffhwy2 <- gBuffer(
+    interstate.projected.US,
+    #interstate.projected,
+    #width = 0.001, # width of buffer
+    width = unit,
+    byid = FALSE # applied across "subgeometries"   IF you do FALSE, will automatically create a dissolved buffer
+  )
+class( buffhwy2 )
+# buffhwy <- SpatialPolygonsDataFrame( buffhwy, data=buffhwy@data)
+str( buffhwy2 )
+plot( buffhwy2, add=T)
+
+```
+
+#### Identify all houses that fall within the buffer zone
+```{r}
+zdat <- read.csv( "https://raw.githubusercontent.com/R-Class/all-labs-ddmii-fjsantam/master/Lab%2006/zillowdata.csv" )
+# For the code used to generate the raw CSV file above, refer to Lab_06_-_Geocoding_CSV_Script_FJS.Rmd in the Lab 06 folder on GitHub
+names( zdat )
+nrow( zdat )
+
+# Convert the coordinates that are in lon (x) lat(y) order to spatial points, identifying the coordinates, data, and coordinate system
+zcoor <- zdat[ c( "lon", "lat") ]
+spdat <- SpatialPointsDataFrame( zcoor, zdat, proj4string=CRS("+proj=longlat +datum=WGS84")  )
+class( spdat )
+head( spdat )
+#points( spdat )
+nrow( spdat )
+
+# Function is: over( locations, layer )
+homes.on.highway <- over( spdat, buffhwy )
+class( homes.on.highway)
+
+# buff1 is a SpatialPolygon; dat is a dataframe
+# will return a list of points (top row) and which polygon they are in (represented by ID # or NA if not in one)
+honh.logical <- homes.on.highway[is.na(homes.on.highway)]
+
+honh.logical <- as.character(homes.on.highway) != "NA"
+honh.logical[ is.na(honh.logical) ] <- FALSE
+class( honh.logical )
+```
+
+
+#### Add a new categorical variable to the houses dataset: within buffer zone or not?
+```{r}
+dat <- as.data.frame( zdat )
+dat.buffer <- cbind( dat, honh.logical )
+head( dat.buffer )
+nrow( dat.buffer )
+
+dat.hwy.buffer <- dat.buffer[ dat.buffer$honh.logical == TRUE, ]
+nrow( dat.hwy.buffer )
+head(dat.hwy.buffer)
+```
+
+
+#### Compile the Map
+```{r}
+par( mar=c(0,0,0,0) )
+plot( syr.sub,  border="gray80" )
+plot( roads.cropped, col="steelblue", lwd=1, add=T )
+#plot( buffhwy, add=T)
+plot( interstate.cropped, col="red", add=T )
+points( spdat, cex = 0.5 )
+points( x=dat.hwy.buffer$lon, y=dat.hwy.buffer$lat, pch=19, col="magenta" )
+```
+
+
+
+## Part 2: Parcels with GeoJSON Files
+
+#### Create a buffer a quarter mile from industrial zones (LandUse) and plot the buffer zone
+
+```{r}
+# Set the working directory
+#setwd( "//hd.ad.syr.edu/02/7796a1/Documents/Desktop/DDM/DDM II/Lab 06" )
+setwd("~/GitHub/all-labs-ddmii-fjsantam/Lab 06")
+#dir.create( "shapefiles" )
+setwd( "./shapefiles" )
+
+
+# Download shapefiles
+# download.file("https://github.com/lecy/geojson/raw/master/syr_parcels.geojson", "syr_parcels.geojson" )
+dir()
+
+######## Shout out to Christopher Davis and his code
+# Load and plot shapefiles
+syr2 <- readOGR( dsn = "shapefiles/syr_parcels.geojson" )
+
+plot( syr2 )
+head( syr2@data)
+names( syr2 )
+#unique( parcels$LandUse )
+
+landUseInd <- syr2[ syr2$LandUse == "Industrial", ]
+landUseNotInd <- syr2[ syr2$LandUse != "Industrial", ]
+#unique(syr2$LandUse)
+
+par( mar=c(0,0,0,0) )
+plot( landUseNotInd, col = "grey", border = F )
+plot( landUseInd, col = "orange", border = F, add = T )
+
+```
+
+##### Creating Buffers
+```{r}
+# Approximate Buffer
+
+buffindzone <- gBuffer(
+  landUseInd,
+  # width = 0.001, # width of buffer
+  # width = 400, # width of buffer
+  # width = 2400, # expanding to play nice with the 189-house dataset
+  width = 0.003621,
+  #width = 3600,
+  capStyle = "FLAT",
+  quadsegs = 1,
+  byid = FALSE # applied across "subgeometries"   IF you do FALSE, will automatically create a dissolved buffer
+)
+
+
+#plot( syr2,  border="gray80" )
+plot( buffindzone, add=T, col=rgb(44,4,248,alpha=50, maxColorValue = 355))
+map.scale( metric=F, ratio=F, relwidth=0.15, cex=0.5)
+
+```
+
+
+##### Identify houses within the buffer zones and create a categorical variable in the dataset indicating proximity to industrial zones
+```{r}
+zdat <- read.csv( "https://raw.githubusercontent.com/R-Class/all-labs-ddmii-fjsantam/master/Lab%2006/zillowdata.csv", stringsAsFactors = F )
+zcoor <- zdat[ c( "lon", "lat") ]
+spdat <- SpatialPoints( zcoor, proj4string=CRS("+proj=longlat +datum=WGS84")  )
+
+
+#spdat <- spTransform( spdat, CRS("+proj=longlat +datum=WGS84 +towgs84=0,0,0 +ellps=WGS84 +no_defs") )
+buffindzone <- spTransform( buffindzone, CRS( "+proj=longlat +datum=WGS84" ) )
+
+# Function is: over( locations, layer )
+homes.in.ind <- over( spdat, buffindzone )
+class( homes.in.ind)
+
+# buff1 is a SpatialPolygon; dat is a dataframe
+# will return a list of points (top row) and which polygon they are in (represented by ID # or NA if not in one)
+#hini.logical <- homes.in.ind[is.na(homes.in.ind)]
+
+hini.logical <- as.character(homes.in.ind) != "NA"
+hini.logical[ is.na(hini.logical) ] <- FALSE
+class( hini.logical )
+
+
+
+############# Add to the dataset #############
+
+dat.buffer <- cbind( dat.buffer, hini.logical )
+head( dat.buffer )
+nrow( dat.buffer )
+
+dat.ind.buffer <- dat.buffer[ dat.buffer$hini.logical == TRUE, ]
+nrow( dat.ind.buffer )
+head(dat.ind.buffer)
+#dat.not.ind.buffer <- dat.buffer[ dat.buffer$hini.logical == FALSE, ]
+#nrow( dat.not.ind.buffer )
+
+
+# Plot the map, overlaying roads, houses, and houses within the industrial zones
+#plot( syr2,  border="gray80" )
+par( mar=c(0,0,0,0) )
+plot( landUseNotInd, col = "grey", border = F )
+plot( landUseInd, col = "orange", border = F, add = T )
+plot( buffindzone, add=T )
+#plot( roads.cropped, col="steelblue", lwd=1, add=T )
+#plot( buffindzone, add=T)
+points( x=spdat$lon, y=spdat$lat, cex = 0.5, pch=1 #col = "grey" 
+       )
+points( x=dat.ind.buffer$lon, y=dat.ind.buffer$lat, pch=19, col="goldenrod4" )
+# points( x=dat.not.ind.buffer$lon, y=dat.not.ind.buffer$lat, pch=19, col="grey" )
+map.scale( metric=F, ratio=F, relwidth=0.15, cex=0.5)
+```
+
+#### Create a buffer zone an eighth of a mile from schools, and plot the buffer zone.
+```{r}
+# Identify the schools
+#unique(syr2$LandUse)
+landUseSchool <- syr2[ syr2$LandUse == "Schools", ]
+landUseNotSchool <- syr2[ syr2$LandUse != "Schools", ]
+
+# Create the buffer
+buffschzone <- gBuffer(
+  landUseSchool,
+  # width = 0.001, # width of buffer
+  # width = 400, # width of buffer
+  # width = 2400, # expanding to play nice with the 189-house dataset
+  #width = 0.003621,
+  width = 0.0018105,
+  #width = 3600,
+  capStyle = "FLAT",
+  quadsegs = 1,
+  byid = FALSE # applied across "subgeometries"   IF you do FALSE, will automatically create a dissolved buffer
+)
+
+par( mar=c(0,0,0,0) )
+plot( landUseNotSchool, col = "grey", border = F )
+plot( landUseSchool, col = "violetred1", border = F, add = T )
+plot( buffschzone, add=T )
+map.scale( metric=F, ratio=F, relwidth=0.15, cex=0.5)
+
+```
+
+#### Identify houses within the buffer zones and create a categorical variable in the dataset indicating proximity to schools
+```{r}
+buffschzone <- spTransform( buffschzone, CRS( "+proj=longlat +datum=WGS84" ) )
+homes.in.sch <- over( spdat, buffschzone )
+class( homes.in.sch)
+
+# buff1 is a SpatialPolygon; dat is a dataframe
+# will return a list of points (top row) and which polygon they are in (represented by ID # or NA if not in one)
+#hins.logical <- homes.in.sch[is.na(homes.in.sch)]
+
+hins.logical <- as.character(homes.in.sch) != "NA"
+hins.logical[ is.na(hins.logical) ] <- FALSE
+class( hins.logical )
+
+
+
+############# Add to the dataset #############
+
+dat.buffer <- cbind( dat.buffer, hins.logical )
+head( dat.buffer )
+nrow( dat.buffer )
+
+dat.sch.buffer <- dat.buffer[ dat.buffer$hini.logical == TRUE, ]
+nrow( dat.sch.buffer )
+head(dat.sch.buffer)
+#dat.not.ind.buffer <- dat.buffer[ dat.buffer$hini.logical == FALSE, ]
+#nrow( dat.not.ind.buffer )
+
+
+# Plot the map, overlaying roads, houses, and houses within the industrial zones
+#plot( syr2,  border="gray80" )
+par( mar=c(0,0,0,0) )
+plot( landUseNotSchool, col = "grey", border = F )
+plot( landUseSchool, col = "violetred1", border = F, add = T )
+#plot( roads.cropped, col="steelblue", lwd=1, add=T )
+#plot( buffindzone, add=T)
+points( x=spdat$lon, y=spdat$lat, cex = 0.5, pch=1 #col = "grey" 
+       )
+points( x=dat.sch.buffer$lon, y=dat.sch.buffer$lat, pch=19, col="springgreen2" )
+# points( x=dat.not.ind.buffer$lon, y=dat.not.ind.buffer$lat, pch=19, col="grey" )
+plot( buffschzone, add=T )
+map.scale( metric=F, ratio=F, relwidth=0.15, cex=0.5)
+
+```
+
