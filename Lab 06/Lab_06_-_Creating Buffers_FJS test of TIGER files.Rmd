@@ -1,0 +1,224 @@
+---
+title: "Lab 06 - Creating Buffers"
+author: "Francisco Santamarina"
+date: "March 09, 2017"
+output:
+  html_document:
+    df_print: paged
+    keep_md: true
+
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set( message=F, warning=F )
+```
+
+## Part 1: Tracts
+
+Load the necessary packages.
+```{r}
+#library( censusAPI)
+#library( ggmap )
+#library( jsonlite )
+library( maps )
+library( maptools )
+library( measurements )
+#library( memisc )
+#library( RCurl )
+library( raster )
+library( rgdal )
+library( rgeos )
+library( sp )
+#library( spatialEco ) 
+
+```
+
+Load and clean the necessary dataset.
+```{r}
+# Set the working directory
+#setwd( "//hd.ad.syr.edu/02/7796a1/Documents/Desktop/DDM/DDM II/Lab 06" )
+setwd("~/Graduate School/PAI 690 Independent Study_DDM II/Labs/Lab 06_Buffers")
+#dir.create( "shapefiles" )
+setwd( "./shapefiles" )
+
+
+# Load and plot shapefiles
+syr <- readShapePoly( fn="tl_2010_36067_tract10", proj4string=CRS("+proj=longlat +datum=WGS84") )
+
+# par( mar=c(0,0,0,0) )
+# plot( syr,  border="gray10" )
+
+
+# Add roads
+
+roads <- readShapeLines( fn="tl_2015_36_prisecroads", proj4string=CRS("+proj=longlat +datum=WGS84") )
+```
+
+#### Create a polygon outline
+```{r}
+syr.sub <- syr[ (as.numeric(substr(syr$GEOID10, 7,11)) < 06200 ) & (as.numeric(substr(syr$GEOID10, 7,11)) > 0), ]
+```
+
+
+#### Clip Roads down to same size as census tracts
+```{r}
+roads.cropped <- raster::intersect( roads, syr.sub )
+
+```
+
+
+#### Extract the interstates as a separate layer
+```{r}
+#interstate <- roads[ roads$RTTYP == "I", ]
+interstate2 <- roads.cropped[ roads.cropped$RTTYP == "I", ]
+interstate.cropped <- raster::intersect( interstate2, syr.sub )
+
+```
+
+#### Create a buffer of approximately a quarter mile from the interstate
+```{r}
+
+# Approximate Buffer
+buffhwy <- gBuffer(
+  interstate.cropped,
+  #interstate.projected,
+  #width = 0.001, # width of buffer
+  width = 0.005, # width of buffer
+  byid = FALSE # applied across "subgeometries"   IF you do FALSE, will automatically create a dissolved buffer
+)
+
+```
+
+#### Identify all houses that fall within the buffer zone
+```{r}
+zdat <- read.csv( "https://raw.githubusercontent.com/R-Class/all-labs-ddmii-fjsantam/master/Lab%2006/zillowdata.csv" )
+# For the code used to generate the raw CSV file above, refer to Lab_06_-_Geocoding_CSV_Script_FJS.Rmd in the Lab 06 folder on GitHub
+
+# Convert the coordinates that are in lon (x) lat(y) order to spatial points, identifying the coordinates, data, and coordinate system
+zcoor <- zdat[ c( "lon", "lat") ]
+spdat <- SpatialPointsDataFrame( zcoor, zdat, proj4string=CRS("+proj=longlat +datum=WGS84")  )
+
+# Function is: over( locations, layer )
+homes.on.highway <- over( spdat, buffhwy )
+
+# buff1 is a SpatialPolygon; dat is a dataframe
+# will return a list of points (top row) and which polygon they are in (represented by ID # or NA if not in one)
+honh.logical <- homes.on.highway[is.na(homes.on.highway)]
+
+honh.logical <- as.character(homes.on.highway) != "NA"
+honh.logical[ is.na(honh.logical) ] <- FALSE
+```
+
+
+#### Add a new categorical variable to the houses dataset: within buffer zone or not?
+```{r}
+dat <- as.data.frame( zdat )
+dat.buffer <- cbind( dat, honh.logical )
+
+dat.hwy.buffer <- dat.buffer[ dat.buffer$honh.logical == TRUE, ]
+```
+
+
+#### Compile the Map
+```{r}
+par( mar=c(0,0,0,0) )
+plot( syr.sub,  border="gray80" )
+plot( roads.cropped, col="steelblue", lwd=1, add=T )
+#plot( buffhwy, add=T)
+plot( interstate.cropped, col="red", add=T )
+points( spdat, cex = 0.5 )
+points( x=dat.hwy.buffer$lon, y=dat.hwy.buffer$lat, pch=19, col="magenta" )
+```
+
+
+## Part 2: Parcels
+
+#### Create a buffer a quarter mile from industrial zones (LandUse) and plot the buffer zone
+#### Redo this using the original map file and geocoding addresses in the parcels file, instead of the syr2 shapefile
+*Note*: To get an accurate buffer zone away from industrial zones, the polygon would have to be read in as a projection of UTM. But the data is in long-lat coordinates. I am unsure how to convert long-lat coordinates for a property to UTM coordinates. Without this conversion, the buffer will have to be an estimate rather than an accurate representation.
+
+Issues:
+```{r}
+#parcels <- read.csv( "https://raw.githubusercontent.com/lecy/maps-in-R/master/Data/syr_parcels.csv" )
+#names(parcels)
+#unique( parcels$LandUse )
+
+### Get census tracts FIPS, grab all ids of 1-61, dissolve the polygons to get the outline
+setwd( "~/Graduate School/PAI 690 Independent Study_DDM II/Labs/shapefiles" )
+# download.file("ftp://ftp2.census.gov/geo/tiger/TIGER2010/TRACT/2010/tl_2010_36067_tract10.zip", "onondaga census tracts.zip" )
+# unzip( "onondaga census tracts.zip" )
+# file.remove( "onondaga census tracts.zip" )
+syr2 <- readShapePoly( fn="01-05-2015", 
+         #Approximate:
+         proj4string=CRS("+proj=longlat +datum=WGS84") 
+         #Accurate:
+         #proj4string=CRS( "+proj=utm +zone=18 +datum=WGS84" ) 
+         )
+
+landUseInd <- syr2[ syr2$LandUse == "Industrial", ]
+landUseNotInd <- syr2[ syr2$LandUse != "Industrial", ]
+#unique(syr2$LandUse)
+
+```
+
+##### Creating Buffers
+```{r}
+# Approximate Buffer
+
+buffindzone <- gBuffer(
+  landUseInd,
+  # width = 0.001, # width of buffer
+  # width = 400, # width of buffer
+  # width = 2400, # expanding to play nice with the 189-house dataset
+  #width = 0.003621,
+  width = 2400,
+  capStyle = "FLAT",
+  quadsegs = 1,
+  byid = FALSE # applied across "subgeometries"   IF you do FALSE, will automatically create a dissolved buffer
+)
+class( buffindzone )
+
+buffindzone <- spTransform( 
+  buffindzone, # source polygon
+  CRS( "+proj=longlat +datum=WGS84" )
+  )
+
+
+#plot( syr2,  border="gray80" )
+
+#map.scale( metric=F, ratio=F, relwidth=0.15, cex=0.5)
+
+```
+
+
+
+#### Identify houses within the buffer zones and create a categorical variable in the dataset indicating proximity to industrial zones
+```{r}
+  
+# Convert the housing data to use the same CRS system
+spdat2 <- spTransform( 
+  spdat, # source polygon
+  CRS( "+proj=longlat +datum=WGS84" ) # use the UTM projection, Syracuse is in Zone 18
+  )
+par( mar=c(0,0,0,0) )
+plot( landUseNotInd, col = "grey", border = F )
+plot( landUseInd, col = "orange", border = F, add = T )
+plot( buffindzone, add=T, col=rgb(44,4,248,alpha=50, maxColorValue = 355))
+#points( x = spdat2$lon, y = spdat2$lat, pch = 19 )
+points( spdat2, cex = 50000 )
+summary(spdat2[,1])
+summary(landUseInd[,1])
+summary(buffindzone[,1])
+
+```
+
+#### Create a buffer zone an eighth of a mile from schools, and plot the buffer zone.
+```{r}
+
+```
+
+#### Identify houses within the buffer zones and create a categorical variable in the dataset indicating proximity to schools
+```{r}
+
+```
+
