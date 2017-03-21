@@ -1,20 +1,12 @@
----
-title: "Lab 06 - Creating Buffers"
-author: "Francisco Santamarina"
-date: "March 09, 2017"
-output:
-  html_document:
-    df_print: paged
-    keep_md: true
+# Lab 06 - Creating Buffers
+Francisco Santamarina  
+March 09, 2017  
 
----
 
-```{r setup, include=FALSE}
-knitr::opts_chunk$set( message=F, warning=F )
-```
 
 Load the necessary packages.
-```{r}
+
+```r
 library( geojsonio )
 library( maps )
 library( maptools )
@@ -28,7 +20,8 @@ library( sp )
 ## Part 1: Tracts with TIGER Files
 
 Load and clean the necessary dataset.
-```{r}
+
+```r
 # Set the working directory
 setwd("~/Graduate School/PAI 690 Independent Study_DDM II/Labs/Lab 06_Buffers")
 # dir.create( "shapefiles" )
@@ -68,8 +61,11 @@ plot( syr,  border="gray54" )
 plot( roads, col="steelblue", lwd=1, add=T )
 ```
 
+![](Lab_06_-_Creating_Buffers_GeoJSON_files/figure-html/unnamed-chunk-2-1.png)<!-- -->
+
 #### Create a polygon outline
-```{r}
+
+```r
 # Plot only the tracts within the city
 # 0 or 1 in the 7th position of the FIPS ID string seem to differentiate city vs rural
 # OR only looking at the last 4 is insufficient for a 3-digit census tract ID
@@ -79,7 +75,8 @@ syr <- syr[ (as.numeric(substr(syr$GEOID10, 7,11)) < 06200 ) & (as.numeric(subst
 
 
 #### Clip or Crop Roads down to same size as census tracts
-```{r}
+
+```r
 # You can use gClip() to do a modified subsetting of geospatial points/lines
 # http://robinlovelace.net/r/2014/07/29/clipping-with-r.html
 # This returns a BOX that has the roads limited within it
@@ -97,9 +94,12 @@ plot( syr,  border="gray54" )
 plot( roads.cropped, col="steelblue", lwd=1, add=T )
 ```
 
+![](Lab_06_-_Creating_Buffers_GeoJSON_files/figure-html/unnamed-chunk-4-1.png)<!-- -->
+
 
 #### Extract the interstates as a separate layer
-```{r}
+
+```r
 interstate <- roads.cropped[ roads.cropped$RTTYP == "I", ]
 interstate <- intersect( interstate, syr )
 
@@ -110,8 +110,11 @@ plot( roads.cropped, col="steelblue", lwd=1, add=T )
 plot( interstate, col="red", add=T )
 ```
 
+![](Lab_06_-_Creating_Buffers_GeoJSON_files/figure-html/unnamed-chunk-5-1.png)<!-- -->
+
 #### Create a buffer of approximately a quarter mile from the interstate
-```{r}
+
+```r
 # This is an approximate buffer; an accurate buffer requires a projection via UTM, Zone 18 for Syracuse/New York
 buffhwy <- gBuffer(
   interstate,
@@ -131,11 +134,13 @@ plot( syr,  border="gray54" )
 plot( roads.cropped, col="steelblue", lwd=1, add=T )
 plot( interstate, col="red", add=T )
 plot( buffhwy, add=T)
-
 ```
 
+![](Lab_06_-_Creating_Buffers_GeoJSON_files/figure-html/unnamed-chunk-6-1.png)<!-- -->
+
 #### Identify all houses that fall within the buffer zone
-```{r}
+
+```r
 zdat <- read.csv( "https://raw.githubusercontent.com/R-Class/all-labs-ddmii-fjsantam/master/Lab%2006/zillowdata.csv" )
 # For the code used to generate the raw CSV file above, refer to Lab_06_-_Geocoding_CSV_Script_FJS.Rmd in the Lab 06 folder on GitHub
 
@@ -154,7 +159,8 @@ honh.logical[ is.na(honh.logical) ] <- FALSE
 
 
 #### Add a new categorical variable to the houses dataset: within buffer zone or not?
-```{r}
+
+```r
 # Bind the categorical variable to the original dataframe
 dat.buffer <- cbind( zdat, honh.logical )
 
@@ -164,7 +170,8 @@ dat.hwy.buffer <- dat.buffer[ dat.buffer$honh.logical == TRUE, ]
 
 
 #### Compile the Map
-```{r}
+
+```r
 par( mar=c(0,0,0,0) )
 plot( syr,  border="gray54" )
 plot( roads.cropped, col="steelblue", lwd=1, add=T )
@@ -173,13 +180,16 @@ points( spdat, cex = 0.5 )
 points( x=dat.hwy.buffer$lon, y=dat.hwy.buffer$lat, pch=19, col="magenta" )
 ```
 
+![](Lab_06_-_Creating_Buffers_GeoJSON_files/figure-html/unnamed-chunk-9-1.png)<!-- -->
+
 
 
 ## Part 2: Parcels with GeoJSON Files
 
 #### Create a buffer a quarter mile from industrial zones (LandUse) and plot the buffer zone
 
-```{r}
+
+```r
 # Set the working directory
 setwd("~/GitHub/all-labs-ddmii-fjsantam/Lab 06")
 
@@ -197,7 +207,16 @@ setwd("~/GitHub/all-labs-ddmii-fjsantam/Lab 06")
 ######## Shout out to Christopher Davis and his code
 # Load the shapefile
 syr2 <- readOGR( dsn = "shapefiles/syr_parcels.geojson" )
+```
 
+```
+## OGR data source with driver: GeoJSON 
+## Source: "shapefiles/syr_parcels.geojson", layer: "OGRGeoJSON"
+## with 41502 features
+## It has 64 fields
+```
+
+```r
 # Identify the industrial parcels
 landUseInd <- syr2[ syr2$LandUse == "Industrial", ]
 landUseNotInd <- syr2[ syr2$LandUse != "Industrial", ]
@@ -211,8 +230,11 @@ plot( landUseInd, col = "orange", border = F, add = T )
 map.scale( metric=F, ratio=F, relwidth=0.15, cex=0.5)
 ```
 
+![](Lab_06_-_Creating_Buffers_GeoJSON_files/figure-html/unnamed-chunk-10-1.png)<!-- -->
+
 ##### Creating Buffers
-```{r}
+
+```r
 # This is an approximate buffer; an accurate buffer requires a projection via UTM, Zone 18 for Syracuse/New York
 
 buffindzone <- gBuffer(
@@ -232,9 +254,12 @@ plot( buffindzone, add=T )
 map.scale( metric=F, ratio=F, relwidth=0.15, cex=0.5)
 ```
 
+![](Lab_06_-_Creating_Buffers_GeoJSON_files/figure-html/unnamed-chunk-11-1.png)<!-- -->
+
 
 ##### Identify houses within the buffer zones and create a categorical variable in the dataset indicating proximity to industrial zones
-```{r}
+
+```r
 # Transform the buffer to the same CRS as the Zillow data in spdat above so that they can be overlaid
 buffindzone <- spTransform( buffindzone, CRS( "+proj=longlat +datum=WGS84" ) )
 
@@ -269,8 +294,11 @@ plot( buffindzone, add=T )
 map.scale( metric=F, ratio=F, relwidth=0.15, cex=0.5)
 ```
 
+![](Lab_06_-_Creating_Buffers_GeoJSON_files/figure-html/unnamed-chunk-12-1.png)<!-- -->
+
 #### Create a buffer zone an eighth of a mile from schools, and plot the buffer zone.
-```{r}
+
+```r
 # Identify the school parcels
 landUseSchool <- syr2[ syr2$LandUse == "Schools", ]
 landUseNotSchool <- syr2[ syr2$LandUse != "Schools", ]
@@ -293,8 +321,11 @@ plot( buffschzone, add=T )
 map.scale( metric=F, ratio=F, relwidth=0.15, cex=0.5)
 ```
 
+![](Lab_06_-_Creating_Buffers_GeoJSON_files/figure-html/unnamed-chunk-13-1.png)<!-- -->
+
 #### Identify houses within the buffer zones and create a categorical variable in the dataset indicating proximity to schools
-```{r}
+
+```r
 # Transform the buffer to the same CRS as the Zillow data in spdat above so that they can be overlaid
 buffschzone <- spTransform( buffschzone, CRS( "+proj=longlat +datum=WGS84" ) )
 
@@ -329,3 +360,5 @@ points( x=dat.sch.buffer$lon, y=dat.sch.buffer$lat, pch=19, col="violetred" )
 plot( buffschzone, add=T )
 map.scale( metric=F, ratio=F, relwidth=0.15, cex=0.5)
 ```
+
+![](Lab_06_-_Creating_Buffers_GeoJSON_files/figure-html/unnamed-chunk-14-1.png)<!-- -->
